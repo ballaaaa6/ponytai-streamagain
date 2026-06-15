@@ -35,7 +35,8 @@ const server = http.createServer(async (req, res) => {
           updatedAt: new Date().toISOString(),
           details: {
             videoRoot: config.videoRoot,
-            ffmpegPath: config.ffmpegPath
+            ffmpegPath: config.ffmpegPath,
+            streams: manager.list()
           }
         }
       });

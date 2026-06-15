@@ -478,6 +478,11 @@ select {
   box-shadow: none;
 }
 
+.danger-primary {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 10px 20px rgba(220, 38, 38, 0.2);
+}
+
 .destination-list,
 .streams-list {
   display: grid;
@@ -597,6 +602,14 @@ select {
   border: 0;
   background: transparent;
   cursor: pointer;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
 }
 
 .dialog {

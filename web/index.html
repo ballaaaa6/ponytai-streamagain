@@ -126,7 +126,7 @@
       <form id="destinationForm" method="dialog">
         <div class="dialog-head">
           <h2>Add Destination</h2>
-          <button class="ghost" value="cancel" type="submit">×</button>
+          <button class="ghost" type="button" data-dialog-close="destinationDialog">×</button>
         </div>
         <div class="platforms" id="platformButtons">
           <button type="button" data-platform="youtube" class="platform active">YouTube</button>
@@ -153,7 +153,7 @@
       <form id="uploadForm" method="dialog">
         <div class="dialog-head">
           <h2>Add video</h2>
-          <button class="ghost" value="cancel" type="submit">×</button>
+          <button class="ghost" type="button" data-dialog-close="uploadDialog">×</button>
         </div>
         <div class="segmented">
           <button class="segment active" type="button" data-upload-mode="device">From device</button>
@@ -187,11 +187,24 @@
       <form method="dialog">
         <div class="dialog-head">
           <h2>Livestream started</h2>
-          <button class="ghost" value="cancel" type="submit">×</button>
+          <button class="ghost" type="button" data-dialog-close="startDialog">×</button>
         </div>
         <p id="startDialogText">The stream is starting on your PC.</p>
         <menu>
           <button class="primary" value="default" type="submit">OK</button>
+        </menu>
+      </form>
+    </dialog>
+    <dialog id="stopDialog" class="dialog compact-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Stop livestream?</h2>
+          <button class="ghost" type="button" data-dialog-close="stopDialog">×</button>
+        </div>
+        <p id="stopDialogText">This will stop FFmpeg for this stream.</p>
+        <menu class="dialog-actions">
+          <button class="secondary" value="cancel" type="submit">Cancel</button>
+          <button id="confirmStopButton" class="primary danger-primary" value="default" type="submit">Stop</button>
         </menu>
       </form>
     </dialog>

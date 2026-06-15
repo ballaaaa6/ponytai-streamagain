@@ -6,6 +6,7 @@ const state = {
   videos: [],
   history: [],
   streams: [],
+  pendingStopStream: null,
   isStartingStream: false,
   storage: {
     usedBytes: 0,
@@ -55,7 +56,11 @@ const elements = {
   uploadModeButtons: document.querySelectorAll("[data-upload-mode]"),
   historyFilterButtons: document.querySelectorAll("[data-history-filter]"),
   startDialog: document.querySelector("#startDialog"),
-  startDialogText: document.querySelector("#startDialogText")
+  startDialogText: document.querySelector("#startDialogText"),
+  stopDialog: document.querySelector("#stopDialog"),
+  stopDialogText: document.querySelector("#stopDialogText"),
+  confirmStopButton: document.querySelector("#confirmStopButton"),
+  dialogCloseButtons: document.querySelectorAll("[data-dialog-close]")
 };
 
 const preferences = {
@@ -87,6 +92,13 @@ elements.historyFilterButtons.forEach((button) => {
 elements.viewButtons.forEach((button) => {
   button.addEventListener("click", () => showView(button.dataset.viewButton));
 });
+elements.dialogCloseButtons.forEach((button) => {
+  button.addEventListener("click", () => closeDialog(button.dataset.dialogClose));
+});
+elements.stopDialog.addEventListener("close", () => {
+  if (elements.stopDialog.returnValue !== "default") state.pendingStopStream = null;
+});
+elements.confirmStopButton.addEventListener("click", confirmStopStream);
 setupDropUpload(elements.videosList);
 setupDropUpload(elements.deviceUploadPane);
 
@@ -448,6 +460,7 @@ function renderHistory() {
   }
 
   for (const item of entries) {
+    const canStop = item.status === "running" && Boolean(item.activeId);
     const row = document.createElement("div");
     row.className = "stream-card";
     row.innerHTML = `
@@ -459,15 +472,39 @@ function renderHistory() {
         <div>${new Date(item.historyAt || item.startedAt).toLocaleString()} · ${escapeHtml(item.file || "")} · ${item.destinations?.length || item.destinationCount || 1} destination</div>
         ${renderResourceLine(item)}
       </div>
-      ${item.status === "running" ? `<button class="secondary" type="button" data-stop="${escapeHtml(item.id)}">Stop</button>` : ""}
+      ${canStop ? `<button class="secondary" type="button" data-stop="${escapeHtml(item.activeId)}">Stop</button>` : ""}
     `;
-    row.querySelector("[data-stop]")?.addEventListener("click", async () => {
-      await api(`/api/streams/${item.id}/stop`, { method: "POST" });
-      showToast(`Stopped: ${item.title}`);
-      await refreshStreams();
-      await loadHistory();
-    });
+    row.querySelector("[data-stop]")?.addEventListener("click", () => askStopStream(item));
     elements.historyList.append(row);
+  }
+}
+
+function askStopStream(item) {
+  state.pendingStopStream = item;
+  elements.stopDialogText.textContent = `Stop "${item.title}" now? The livestream will end immediately.`;
+  elements.confirmStopButton.disabled = false;
+  elements.confirmStopButton.textContent = "Stop";
+  elements.stopDialog.returnValue = "";
+  elements.stopDialog.showModal();
+}
+
+async function confirmStopStream(event) {
+  event.preventDefault();
+  const item = state.pendingStopStream;
+  if (!item?.activeId) return;
+  elements.confirmStopButton.disabled = true;
+  elements.confirmStopButton.textContent = "Stopping...";
+  try {
+    await api(`/api/streams/${encodeURIComponent(item.activeId)}/stop`, { method: "POST" });
+    elements.stopDialog.close("default");
+    state.pendingStopStream = null;
+    showToast(`Stopped: ${item.title}`);
+    await refreshStreams();
+    await loadHistory();
+  } catch (error) {
+    showToast(error.message);
+    elements.confirmStopButton.disabled = false;
+    elements.confirmStopButton.textContent = "Stop";
   }
 }
 
@@ -572,12 +609,23 @@ function renderResourceSummary() {
 function combinedHistory() {
   const live = state.streams.map((stream) => ({
     ...stream,
+    activeId: stream.id,
     resources: stream.resources || findAgentStream(stream)?.resources || null,
     historyAt: stream.startedAt,
     destinationCount: stream.destinations?.length || 0
   }));
   const liveIds = new Set(live.map((item) => item.id));
-  return [...live, ...state.history.filter((item) => !liveIds.has(item.id))];
+  return [
+    ...live,
+    ...state.history
+      .filter((item) => !liveIds.has(item.id))
+      .map((item) => ({
+        ...item,
+        status: item.status === "running" ? "stopped" : item.status,
+        event: item.event === "started" ? "stale" : item.event,
+        activeId: null
+      }))
+  ];
 }
 
 function activeStreamsWithResources() {
@@ -677,6 +725,11 @@ function showToast(message) {
   showToast.timer = setTimeout(() => {
     elements.toast.hidden = true;
   }, 3600);
+}
+
+function closeDialog(id) {
+  const dialog = document.getElementById(id);
+  if (dialog?.open) dialog.close("cancel");
 }
 
 function escapeHtml(value) {
