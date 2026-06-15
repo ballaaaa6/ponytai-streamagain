@@ -2,6 +2,7 @@ const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024 * 1024;
 const VIDEO_PREFIX = "videos/";
 const CONTROL_PREFIX = "_control/";
 const SUPPORTED_EXTENSIONS = new Set([".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"]);
+let cachedAuth = null;
 
 export async function onRequest(context) {
   const { request, env, params } = context;
@@ -173,18 +174,19 @@ async function createB2Client(env) {
   const keyId = cleanSecret(env.B2_KEY_ID);
   const applicationKey = cleanSecret(env.B2_APPLICATION_KEY);
   const bucketName = cleanSecret(env.B2_BUCKET_NAME) || "ponytai-streamagain-videos";
+  let bucketId = cleanSecret(env.B2_BUCKET_ID);
   if (!keyId || !applicationKey) throw new Error("Backblaze B2 secrets are not configured.");
 
   const basic = base64Encode(`${keyId}:${applicationKey}`);
-  const auth = await fetch("https://api.backblazeb2.com/b2api/v3/b2_authorize_account", {
-    headers: { Authorization: `Basic ${basic}` }
-  }).then(readB2);
-  const bucket = await fetch(`${auth.apiInfo.storageApi.apiUrl}/b2api/v3/b2_list_buckets`, {
-    method: "POST",
-    headers: b2Headers(auth),
-    body: JSON.stringify({ accountId: auth.accountId, bucketName })
-  }).then(readB2);
-  const bucketId = bucket.buckets?.[0]?.bucketId;
+  const auth = await getB2Auth(basic);
+  if (!bucketId) {
+    const bucket = await fetch(`${auth.apiInfo.storageApi.apiUrl}/b2api/v3/b2_list_buckets`, {
+      method: "POST",
+      headers: b2Headers(auth),
+      body: JSON.stringify({ accountId: auth.accountId, bucketName })
+    }).then(readB2);
+    bucketId = bucket.buckets?.[0]?.bucketId;
+  }
   if (!bucketId) throw new Error(`Backblaze B2 bucket not found: ${bucketName}`);
 
   return {
@@ -244,6 +246,18 @@ async function createB2Client(env) {
       }).then(readB2);
     }
   };
+}
+
+async function getB2Auth(basic) {
+  if (cachedAuth && cachedAuth.expiresAt > Date.now()) return cachedAuth.auth;
+  const auth = await fetch("https://api.backblazeb2.com/b2api/v3/b2_authorize_account", {
+    headers: { Authorization: `Basic ${basic}` }
+  }).then(readB2);
+  cachedAuth = {
+    auth,
+    expiresAt: Date.now() + 45 * 60 * 1000
+  };
+  return auth;
 }
 
 async function storageSummary(b2) {
