@@ -13,4 +13,5 @@ if (!(Test-Path $cloudflared)) {
 
 Write-Host "Starting tunnel to http://localhost:8787"
 Write-Host "Copy the trycloudflare.com URL that appears below and open it on your phone."
-& $cloudflared tunnel --url http://localhost:8787
+$logPath = Join-Path $projectRoot ".data\tunnel.log"
+& $cloudflared tunnel --url http://localhost:8787 2>&1 | Tee-Object -FilePath $logPath

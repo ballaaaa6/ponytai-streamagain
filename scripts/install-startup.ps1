@@ -15,15 +15,26 @@ try {
 } catch {
   $startup = [Environment]::GetFolderPath("Startup")
   $vbsPath = Join-Path $startup "Ponytai StreamAgain Agent.vbs"
-  $command = "cd /d `"$projectRoot`" && `"$nodePath`" agent/server.js"
   $vbs = @"
 Set shell = CreateObject("WScript.Shell")
-shell.Run "cmd.exe /c $command", 0, False
+shell.CurrentDirectory = "$projectRoot"
+shell.Run """$nodePath"" agent/server.js", 0, False
 "@
   Set-Content -Path $vbsPath -Value $vbs -Encoding ASCII
   Start-Process -FilePath "wscript.exe" -ArgumentList "`"$vbsPath`"" -WindowStyle Hidden
   Write-Host "Scheduled task failed, installed Startup Folder launcher instead."
   Write-Host "Launcher: $vbsPath"
 }
+
+$startup = [Environment]::GetFolderPath("Startup")
+$tunnelVbsPath = Join-Path $startup "Ponytai StreamAgain Tunnel.vbs"
+$tunnelScript = Join-Path $projectRoot "scripts\start-tunnel.ps1"
+$tunnelVbs = @"
+Set shell = CreateObject("WScript.Shell")
+shell.CurrentDirectory = "$projectRoot"
+shell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""$tunnelScript""", 0, False
+"@
+Set-Content -Path $tunnelVbsPath -Value $tunnelVbs -Encoding ASCII
+Write-Host "Installed Startup Folder tunnel launcher: $tunnelVbsPath"
 
 Write-Host "Project: $projectRoot"
