@@ -471,6 +471,13 @@ select {
   cursor: pointer;
 }
 
+.primary:disabled,
+.stream-form.is-busy .primary {
+  cursor: wait;
+  opacity: 0.62;
+  box-shadow: none;
+}
+
 .destination-list,
 .streams-list {
   display: grid;
@@ -598,6 +605,16 @@ select {
   border-radius: 8px;
   padding: 0;
   box-shadow: 0 24px 80px rgba(17, 24, 39, 0.34);
+}
+
+.compact-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.compact-dialog p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .dialog::backdrop {

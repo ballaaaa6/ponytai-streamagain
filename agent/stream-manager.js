@@ -34,6 +34,19 @@ export class StreamManager {
     }));
   }
 
+  findActiveDuplicate(payload) {
+    const title = String(payload.title || "").trim();
+    const file = path.resolve(String(payload.file || ""));
+    const destinations = Array.isArray(payload.destinations) ? payload.destinations : [];
+
+    return [...this.jobs.values()].find((job) => {
+      return ["running", "stopping"].includes(job.status)
+        && job.title === title
+        && path.resolve(job.file) === file
+        && destinationSignature(job.destinations) === destinationSignature(destinations);
+    }) || null;
+  }
+
   start(payload) {
     const title = String(payload.title || "").trim();
     const file = String(payload.file || "").trim();
@@ -156,6 +169,13 @@ function isFullRtmpUrl(value) {
 
 function escapeTeeUrl(value) {
   return value.replace(/\|/g, "\\|");
+}
+
+function destinationSignature(destinations) {
+  return destinations
+    .map((destination) => `${destination.platform || ""}:${buildRtmpUrl(destination)}`)
+    .sort()
+    .join("|");
 }
 
 function buildVideoEncoderArgs(encoder) {

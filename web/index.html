@@ -81,7 +81,7 @@
             <div id="destinationList" class="destination-list"></div>
           </div>
 
-          <button class="primary" type="submit">Start Livestream</button>
+          <button id="startStreamButton" class="primary" type="submit">Start Livestream</button>
         </form>
       </section>
 
@@ -183,6 +183,18 @@
     </dialog>
 
     <div id="toast" class="toast" hidden></div>
+    <dialog id="startDialog" class="dialog compact-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Livestream started</h2>
+          <button class="ghost" value="cancel" type="submit">×</button>
+        </div>
+        <p id="startDialogText">The stream is starting on your PC.</p>
+        <menu>
+          <button class="primary" value="default" type="submit">OK</button>
+        </menu>
+      </form>
+    </dialog>
     <script src="./app.js" type="module"></script>
   </body>
 </html>

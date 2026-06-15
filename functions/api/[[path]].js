@@ -146,6 +146,13 @@ export async function onRequest(context) {
         log: []
       };
       const jobs = await readJobs(b2);
+      const duplicate = jobs.find((item) => {
+        return ["queued", "downloading", "running", "stopping"].includes(item.status)
+          && item.title === job.title
+          && item.videoKey === job.videoKey
+          && destinationSignature(item.destinations) === destinationSignature(job.destinations);
+      });
+      if (duplicate) return json({ error: "This livestream is already running." }, 409);
       jobs.unshift(job);
       await writeJobs(b2, jobs);
       await appendHistory(b2, { ...publicJob(job), event: "created" });
@@ -391,6 +398,18 @@ function sanitizeFileName(name) {
 
 function safeHeaderName(name) {
   return String(name || "video").replace(/["\r\n]/g, "_");
+}
+
+function destinationSignature(destinations = []) {
+  return destinations
+    .map((destination) => {
+      const platform = String(destination.platform || "");
+      const serverUrl = String(destination.serverUrl || "").trim().replace(/\/+$/g, "");
+      const streamKey = String(destination.streamKey || "").trim();
+      return `${platform}:${serverUrl}/${streamKey}`;
+    })
+    .sort()
+    .join("|");
 }
 
 function b2Headers(auth) {

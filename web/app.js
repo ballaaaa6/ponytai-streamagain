@@ -6,6 +6,7 @@ const state = {
   videos: [],
   history: [],
   streams: [],
+  isStartingStream: false,
   storage: {
     usedBytes: 0,
     limitBytes: 5 * 1024 * 1024 * 1024,
@@ -26,6 +27,7 @@ const elements = {
   storageBar: document.querySelector("#storageBar"),
   resourceSummary: document.querySelector("#resourceSummary"),
   titleInput: document.querySelector("#titleInput"),
+  startStreamButton: document.querySelector("#startStreamButton"),
   videoSelect: document.querySelector("#videoSelect"),
   streamForm: document.querySelector("#streamForm"),
   destinationList: document.querySelector("#destinationList"),
@@ -51,7 +53,9 @@ const elements = {
   videoUrlInput: document.querySelector("#videoUrlInput"),
   videoUrlNameInput: document.querySelector("#videoUrlNameInput"),
   uploadModeButtons: document.querySelectorAll("[data-upload-mode]"),
-  historyFilterButtons: document.querySelectorAll("[data-history-filter]")
+  historyFilterButtons: document.querySelectorAll("[data-history-filter]"),
+  startDialog: document.querySelector("#startDialog"),
+  startDialogText: document.querySelector("#startDialogText")
 };
 
 const preferences = {
@@ -239,6 +243,7 @@ function renderDestinations() {
 
 async function startStream(event) {
   event.preventDefault();
+  if (state.isStartingStream) return;
   if (!state.destinations.length) {
     showToast("Add at least one destination first.");
     return;
@@ -252,6 +257,14 @@ async function startStream(event) {
     destinations: state.destinations
   };
 
+  if (hasActiveDuplicate(payload)) {
+    showToast("This livestream is already running. Check History.");
+    setHistoryFilter("running");
+    showView("history");
+    return;
+  }
+
+  setStartState(true);
   try {
     await api("/api/streams", {
       method: "POST",
@@ -260,15 +273,48 @@ async function startStream(event) {
     preferences.lastTitle = payload.title;
     localStorage.setItem("ponytai:lastTitle", payload.title);
     showToast(`Livestream started: ${payload.title}`);
+    showStartDialog(payload.title);
     elements.videoSelect.value = payload.file;
     elements.streamForm.querySelector('[name="repeat"][value="loop"]').checked = payload.repeat !== "once";
     state.destinations = [];
     renderDestinations();
     await refreshStreams();
     await loadHistory();
+    setHistoryFilter("running");
+    showView("history");
   } catch (error) {
     showToast(error.message);
+  } finally {
+    setStartState(false);
   }
+}
+
+function setStartState(isStarting) {
+  state.isStartingStream = isStarting;
+  elements.startStreamButton.disabled = isStarting;
+  elements.startStreamButton.textContent = isStarting ? "Starting..." : "Start Livestream";
+  elements.streamForm.classList.toggle("is-busy", isStarting);
+}
+
+function hasActiveDuplicate(payload) {
+  return state.streams.some((stream) => {
+    return ["queued", "downloading", "running"].includes(stream.status)
+      && stream.title === payload.title
+      && (stream.videoKey === payload.file || stream.file === payload.file || stream.file === selectedVideoName(payload.file));
+  });
+}
+
+function selectedVideoName(key) {
+  return state.videos.find((video) => video.key === key)?.name || key;
+}
+
+function showStartDialog(title) {
+  elements.startDialogText.textContent = `${title} is now starting. You are being moved to History so you can watch the live status.`;
+  if (!elements.startDialog.open) elements.startDialog.showModal();
+  clearTimeout(showStartDialog.timer);
+  showStartDialog.timer = setTimeout(() => {
+    if (elements.startDialog.open) elements.startDialog.close();
+  }, 2200);
 }
 
 async function uploadVideo(event) {

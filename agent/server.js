@@ -102,6 +102,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/streams") {
       const body = await readJson(req);
       const file = resolveVideoPath(body.file);
+      const duplicate = manager.findActiveDuplicate({
+        title: body.title,
+        file,
+        destinations: body.destinations
+      });
+      if (duplicate) throw new Error("This livestream is already running.");
       const started = manager.start({ ...body, file });
       appendHistory({
         id: started.id,
