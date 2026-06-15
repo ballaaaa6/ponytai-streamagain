@@ -75,18 +75,20 @@ setupDropUpload(elements.videosList);
 setupDropUpload(elements.deviceUploadPane);
 
 refresh();
-setInterval(refresh, 5000);
+setInterval(refreshLight, 30000);
 
 async function refresh() {
   await Promise.all([loadHealth(), loadVideos(), refreshStreams(), loadHistory()]);
 }
 
+async function refreshLight() {
+  await Promise.all([loadHealth(), refreshStreams()]);
+}
+
 async function loadHealth() {
   try {
     const health = await api("/api/health");
-    state.storage = health.storage || state.storage;
     state.agent = health.agent;
-    renderStorage();
     renderAgent();
   } catch {
     state.agent = null;

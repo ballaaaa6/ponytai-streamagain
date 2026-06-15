@@ -14,9 +14,8 @@ export async function onRequest(context) {
     const b2 = await createB2Client(env);
 
     if (request.method === "GET" && route === "/health") {
-      const storage = await storageSummary(b2);
       const agent = await readJson(b2, `${CONTROL_PREFIX}agent.json`, null);
-      return json({ ok: true, mode: "b2", storage, agent });
+      return json({ ok: true, mode: "b2", agent });
     }
 
     if (request.method === "GET" && route === "/videos") {
