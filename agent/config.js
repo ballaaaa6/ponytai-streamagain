@@ -14,6 +14,7 @@ export function loadConfig() {
   return {
     port: Number(process.env.PORT || 8787),
     ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg",
+    videoEncoder: process.env.VIDEO_ENCODER || "h264_nvenc",
     videoRoot,
     dataDir,
     cloudApiUrl: process.env.CLOUD_API_URL || "https://ponytai-streamagain.pages.dev",

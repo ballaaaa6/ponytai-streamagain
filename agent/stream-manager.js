@@ -111,24 +111,7 @@ export class StreamManager {
       "0:v:0",
       "-map",
       "0:a:0?",
-      "-c:v",
-      "libx264",
-      "-preset",
-      "veryfast",
-      "-profile:v",
-      "main",
-      "-pix_fmt",
-      "yuv420p",
-      "-r",
-      "30",
-      "-g",
-      "60",
-      "-b:v",
-      "2500k",
-      "-maxrate",
-      "2500k",
-      "-bufsize",
-      "5000k",
+      ...buildVideoEncoderArgs(this.config.videoEncoder),
       "-c:a",
       "aac",
       "-b:a",
@@ -171,6 +154,58 @@ function isFullRtmpUrl(value) {
 
 function escapeTeeUrl(value) {
   return value.replace(/\|/g, "\\|");
+}
+
+function buildVideoEncoderArgs(encoder) {
+  if (encoder === "h264_nvenc") {
+    return [
+      "-c:v",
+      "h264_nvenc",
+      "-preset",
+      "p4",
+      "-tune",
+      "ll",
+      "-profile:v",
+      "main",
+      "-pix_fmt",
+      "yuv420p",
+      "-r",
+      "30",
+      "-g",
+      "60",
+      "-rc",
+      "cbr",
+      "-b:v",
+      "2500k",
+      "-maxrate",
+      "2500k",
+      "-bufsize",
+      "5000k"
+    ];
+  }
+
+  return [
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-tune",
+    "zerolatency",
+    "-profile:v",
+    "baseline",
+    "-pix_fmt",
+    "yuv420p",
+    "-r",
+    "30",
+    "-g",
+    "60",
+    "-b:v",
+    "1800k",
+    "-maxrate",
+    "1800k",
+    "-bufsize",
+    "3600k"
+  ];
 }
 
 function createId() {
