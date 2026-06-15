@@ -23,6 +23,21 @@ export async function onRequest(context) {
       return json(await storageSummary(b2));
     }
 
+    if (request.method === "GET" && route === "/videos/file") {
+      const key = String(url.searchParams.get("key") || "");
+      if (!key.startsWith(VIDEO_PREFIX)) return json({ error: "Invalid video key." }, 400);
+      const response = await b2.download(key);
+      if (!response.ok) return json({ error: "Video not found." }, 404);
+      return new Response(response.body, {
+        headers: {
+          "Content-Type": response.headers.get("content-type") || "application/octet-stream",
+          "Content-Length": response.headers.get("content-length") || "",
+          "Accept-Ranges": response.headers.get("accept-ranges") || "bytes",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
+    }
+
     if (request.method === "POST" && route === "/videos/upload") {
       const name = sanitizeFileName(url.searchParams.get("name") || "");
       if (!name) return json({ error: "A supported video file name is required." }, 400);
@@ -58,6 +73,27 @@ export async function onRequest(context) {
         metadata: { originalName: encodeURIComponent(name), importedFrom: encodeURIComponent(sourceUrl.href) }
       });
       return json({ ok: true, video: fileToVideo(uploaded) }, 201);
+    }
+
+    if (request.method === "POST" && route === "/videos/rename") {
+      const body = await request.json();
+      const key = String(body.key || "");
+      const name = sanitizeFileName(body.name || "");
+      if (!key.startsWith(VIDEO_PREFIX)) return json({ error: "Invalid video key." }, 400);
+      if (!name) return json({ error: "A supported video file name is required." }, 400);
+      const source = await b2.fileInfo(key);
+      if (!source) return json({ error: "Video not found." }, 404);
+      const targetKey = `${VIDEO_PREFIX}${Date.now()}-${name}`;
+      const download = await b2.download(key);
+      if (!download.ok || !download.body) return json({ error: "Could not read the source video." }, 400);
+      const upload = await b2.uploadUrl();
+      const uploaded = await b2.upload(upload, targetKey, download.body, {
+        contentLength: Number(source.contentLength || download.headers.get("content-length") || 0),
+        contentType: download.headers.get("content-type") || "application/octet-stream",
+        metadata: { originalName: encodeURIComponent(name) }
+      });
+      await b2.deleteFile(source.fileName, source.fileId);
+      return json({ ok: true, video: fileToVideo(uploaded) });
     }
 
     if (request.method === "GET" && route === "/videos/download") {

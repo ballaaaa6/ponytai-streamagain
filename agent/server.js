@@ -47,6 +47,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/videos/file") {
+      const key = String(url.searchParams.get("key") || "");
+      const file = resolveVideoPath(key);
+      streamVideoFile(req, res, file);
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/videos/upload") {
       const fileName = sanitizeFileName(url.searchParams.get("name") || "");
       if (!fileName) throw new Error("File name is required.");
@@ -67,6 +74,18 @@ const server = http.createServer(async (req, res) => {
       const target = path.join(config.videoRoot, fileName);
       await downloadToFile(sourceUrl, target);
       sendJson(res, { ok: true, video: videoInfo(target) }, 201);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/videos/rename") {
+      const body = await readJson(req);
+      const file = resolveVideoPath(body.key);
+      const fileName = sanitizeFileName(body.name || "");
+      if (!fileName) throw new Error("A supported video file name is required.");
+      const target = path.join(path.dirname(file), fileName);
+      if (fs.existsSync(target)) throw new Error("A video with that name already exists.");
+      fs.renameSync(file, target);
+      sendJson(res, { ok: true, video: videoInfo(target) });
       return;
     }
 
@@ -130,13 +149,63 @@ server.listen(config.port, () => {
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
 function sendJson(res, data, status = 200) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(data));
+}
+
+function streamVideoFile(req, res, file) {
+  const stat = fs.statSync(file);
+  const range = req.headers.range;
+  const type = videoContentType(file);
+
+  if (!range) {
+    res.writeHead(200, {
+      "Content-Type": type,
+      "Content-Length": stat.size,
+      "Accept-Ranges": "bytes"
+    });
+    fs.createReadStream(file).pipe(res);
+    return;
+  }
+
+  const match = range.match(/bytes=(\d+)-(\d*)/);
+  if (!match) {
+    res.writeHead(416, { "Content-Range": `bytes */${stat.size}` });
+    res.end();
+    return;
+  }
+
+  const start = Number(match[1]);
+  const end = match[2] ? Number(match[2]) : stat.size - 1;
+  if (start >= stat.size || end >= stat.size) {
+    res.writeHead(416, { "Content-Range": `bytes */${stat.size}` });
+    res.end();
+    return;
+  }
+
+  res.writeHead(206, {
+    "Content-Type": type,
+    "Content-Length": end - start + 1,
+    "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+    "Accept-Ranges": "bytes"
+  });
+  fs.createReadStream(file, { start, end }).pipe(res);
+}
+
+function videoContentType(file) {
+  return {
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".webm": "video/webm",
+    ".avi": "video/x-msvideo",
+    ".m4v": "video/x-m4v"
+  }[path.extname(file).toLowerCase()] || "application/octet-stream";
 }
 
 function readJson(req) {

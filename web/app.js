@@ -23,7 +23,8 @@ const elements = {
   runningCount: document.querySelector("#runningCount"),
   storageText: document.querySelector("#storageText"),
   storageBar: document.querySelector("#storageBar"),
-  offlineNotice: document.querySelector("#offlineNotice"),
+  resourceSummary: document.querySelector("#resourceSummary"),
+  titleInput: document.querySelector("#titleInput"),
   videoSelect: document.querySelector("#videoSelect"),
   streamForm: document.querySelector("#streamForm"),
   destinationList: document.querySelector("#destinationList"),
@@ -34,7 +35,6 @@ const elements = {
   serverUrlLabel: document.querySelector("#serverUrlLabel"),
   serverUrlInput: document.querySelector("#serverUrlInput"),
   streamKeyInput: document.querySelector("#streamKeyInput"),
-  streamsList: document.querySelector("#streamsList"),
   toast: document.querySelector("#toast"),
   viewButtons: document.querySelectorAll("[data-view-button]"),
   views: document.querySelectorAll("[data-view]"),
@@ -52,6 +52,17 @@ const elements = {
   uploadModeButtons: document.querySelectorAll("[data-upload-mode]"),
   historyFilterButtons: document.querySelectorAll("[data-history-filter]")
 };
+
+const preferences = {
+  historyFilter: "all",
+  lastTitle: localStorage.getItem("ponytai:lastTitle") || ""
+};
+
+elements.titleInput.value = preferences.lastTitle;
+elements.titleInput.addEventListener("input", () => {
+  preferences.lastTitle = elements.titleInput.value;
+  localStorage.setItem("ponytai:lastTitle", preferences.lastTitle);
+});
 
 elements.refreshButton.addEventListener("click", refresh);
 elements.addDestinationButton.addEventListener("click", () => elements.destinationDialog.showModal());
@@ -119,10 +130,11 @@ async function refreshStreams() {
     const { streams } = await api("/api/streams");
     state.streams = streams || [];
     elements.runningCount.textContent = state.streams.filter((stream) => stream.status === "running").length;
-    renderStreams();
+    renderResourceSummary();
+    renderHistory();
   } catch {
     elements.runningCount.textContent = "0";
-    elements.streamsList.innerHTML = `<p class="empty">Cloud API is not reachable.</p>`;
+    renderResourceSummary();
   }
 }
 
@@ -142,7 +154,6 @@ function renderAgent() {
   elements.agentDot.classList.toggle("online", Boolean(isFresh));
   elements.agentLabel.textContent = isFresh ? "PC agent online" : "PC agent offline";
   elements.agentRoot.textContent = isFresh ? `${state.agent.name} · ${new Date(state.agent.updatedAt).toLocaleTimeString()}` : "Waiting for the Windows startup agent";
-  elements.offlineNotice.hidden = Boolean(isFresh);
 }
 
 function renderStorage() {
@@ -230,7 +241,7 @@ async function startStream(event) {
 
   const form = new FormData(elements.streamForm);
   const payload = {
-    title: form.get("title"),
+    title: String(form.get("title") || "").trim(),
     file: form.get("file"),
     repeat: form.get("repeat") === "once" ? "once" : "loop",
     destinations: state.destinations
@@ -241,8 +252,11 @@ async function startStream(event) {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    showToast("Stream queued. The PC agent will start FFmpeg.");
-    elements.streamForm.reset();
+    preferences.lastTitle = payload.title;
+    localStorage.setItem("ponytai:lastTitle", payload.title);
+    showToast(`Livestream started: ${payload.title}`);
+    elements.videoSelect.value = payload.file;
+    elements.streamForm.querySelector('[name="repeat"][value="loop"]').checked = payload.repeat !== "once";
     state.destinations = [];
     renderDestinations();
     await refreshStreams();
@@ -314,15 +328,20 @@ function renderVideos() {
   }
 
   for (const video of state.videos) {
-    const row = document.createElement("div");
-    row.className = "stream-card";
+    const row = document.createElement("article");
+    row.className = "video-card";
     row.innerHTML = `
-      <div>
+      <div class="video-preview">
+        <video muted playsinline preload="metadata" src="${videoSource(video)}"></video>
+        <span>${formatDuration(video.durationSeconds)}</span>
+      </div>
+      <div class="video-meta">
         <strong>${escapeHtml(video.name)}</strong>
-        <div>${formatBytes(video.size)} · ${escapeHtml(video.key)}</div>
+        <small>${formatBytes(video.size)} · ${new Date(video.updatedAt).toLocaleString()}</small>
       </div>
       <div class="row-actions">
         <button class="secondary" type="button" data-use>Use</button>
+        <button class="secondary" type="button" data-rename>Rename</button>
         <button class="danger" type="button" data-delete>Delete</button>
       </div>
     `;
@@ -330,9 +349,21 @@ function renderVideos() {
       elements.videoSelect.value = video.key;
       showView("stream");
     });
+    row.querySelector("[data-rename]").addEventListener("click", () => renameVideo(video));
     row.querySelector("[data-delete]").addEventListener("click", () => deleteVideo(video.key));
     elements.videosList.append(row);
   }
+}
+
+async function renameVideo(video) {
+  const nextName = prompt("New video name", video.name);
+  if (!nextName || nextName === video.name) return;
+  await api("/api/videos/rename", {
+    method: "POST",
+    body: JSON.stringify({ key: video.key, name: nextName })
+  });
+  showToast("Video renamed.");
+  await loadVideos();
 }
 
 async function deleteVideo(key) {
@@ -343,7 +374,14 @@ async function deleteVideo(key) {
 
 function renderHistory() {
   elements.historyList.innerHTML = "";
-  if (!state.history.length) {
+  const entries = combinedHistory().filter((item) => {
+    if (preferences.historyFilter === "all") return true;
+    if (preferences.historyFilter === "running") return item.status === "running";
+    if (preferences.historyFilter === "finished") return ["stopped", "ended", "error"].includes(item.status);
+    return item.status === preferences.historyFilter;
+  });
+
+  if (!entries.length) {
     elements.historyList.innerHTML = `
       <div class="empty-state">
         <div>
@@ -358,15 +396,26 @@ function renderHistory() {
     return;
   }
 
-  for (const item of state.history) {
+  for (const item of entries) {
     const row = document.createElement("div");
     row.className = "stream-card";
     row.innerHTML = `
       <div>
-        <strong>${escapeHtml(item.title)}</strong>
-        <div>${new Date(item.historyAt || item.startedAt).toLocaleString()} · ${escapeHtml(item.file)} · ${escapeHtml(item.status || item.event || "created")}</div>
+        <div class="history-title">
+          <strong>${escapeHtml(item.title || "Untitled stream")}</strong>
+          <span class="status-pill ${statusClass(item.status)}">${statusLabel(item.status)}</span>
+        </div>
+        <div>${new Date(item.historyAt || item.startedAt).toLocaleString()} · ${escapeHtml(item.file || "")} · ${item.destinations?.length || item.destinationCount || 1} destination</div>
+        ${renderResourceLine(item)}
       </div>
+      ${item.status === "running" ? `<button class="secondary" type="button" data-stop="${escapeHtml(item.id)}">Stop</button>` : ""}
     `;
+    row.querySelector("[data-stop]")?.addEventListener("click", async () => {
+      await api(`/api/streams/${item.id}/stop`, { method: "POST" });
+      showToast(`Stopped: ${item.title}`);
+      await refreshStreams();
+      await loadHistory();
+    });
     elements.historyList.append(row);
   }
 }
@@ -406,6 +455,7 @@ function setUploadMode(mode) {
 }
 
 function setHistoryFilter(filter) {
+  preferences.historyFilter = filter;
   elements.historyFilterButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.historyFilter === filter);
   });
@@ -427,29 +477,89 @@ function showView(name) {
   });
 }
 
-function renderStreams() {
-  elements.streamsList.innerHTML = "";
-  if (!state.streams.length) {
-    elements.streamsList.innerHTML = `<p class="empty">No queued or running streams.</p>`;
+function renderResourceSummary() {
+  if (!elements.resourceSummary) return;
+  const running = state.streams.filter((stream) => stream.status === "running");
+  if (!running.length) {
+    elements.resourceSummary.innerHTML = `
+      <div class="resource-card">
+        <span>Status</span>
+        <strong>Idle</strong>
+        <small>No active FFmpeg process</small>
+      </div>
+    `;
     return;
   }
 
-  for (const stream of state.streams) {
-    const card = document.createElement("div");
-    card.className = "stream-card";
-    card.innerHTML = `
-      <div>
-        <strong>${escapeHtml(stream.title)}</strong>
-        <div>${escapeHtml(stream.file)} · ${escapeHtml(stream.status)} · ${stream.destinations.length} destination</div>
-      </div>
-      <button class="secondary" type="button" ${["stopped", "error"].includes(stream.status) ? "disabled" : ""}>Stop</button>
-    `;
-    card.querySelector("button").addEventListener("click", async () => {
-      await api(`/api/streams/${stream.id}/stop`, { method: "POST" });
-      await refreshStreams();
-    });
-    elements.streamsList.append(card);
-  }
+  const memoryBytes = running.reduce((sum, stream) => sum + (stream.resources?.memoryBytes || 0), 0);
+  const cpu = running.reduce((sum, stream) => sum + (stream.resources?.cpuPercent || 0), 0);
+  const encoder = running.find((stream) => stream.resources?.encoder)?.resources?.encoder || "GPU/CPU";
+  elements.resourceSummary.innerHTML = `
+    <div class="resource-card">
+      <span>Live streams</span>
+      <strong>${running.length}</strong>
+      <small>${running.map((stream) => escapeHtml(stream.title)).join(", ")}</small>
+    </div>
+    <div class="resource-card">
+      <span>CPU</span>
+      <strong>${cpu ? `${cpu.toFixed(1)}%` : "Measuring"}</strong>
+      <small>Total FFmpeg CPU load</small>
+    </div>
+    <div class="resource-card">
+      <span>Memory</span>
+      <strong>${memoryBytes ? formatBytes(memoryBytes) : "Measuring"}</strong>
+      <small>Total FFmpeg memory</small>
+    </div>
+    <div class="resource-card">
+      <span>Encoder</span>
+      <strong>${escapeHtml(encoder)}</strong>
+      <small>Current stream encoder</small>
+    </div>
+  `;
+}
+
+function combinedHistory() {
+  const live = state.streams.map((stream) => ({
+    ...stream,
+    historyAt: stream.startedAt,
+    destinationCount: stream.destinations?.length || 0
+  }));
+  const liveIds = new Set(live.map((item) => item.id));
+  return [...live, ...state.history.filter((item) => !liveIds.has(item.id))];
+}
+
+function renderResourceLine(item) {
+  const resources = item.resources;
+  if (!resources) return "";
+  const parts = [];
+  if (resources.cpuPercent) parts.push(`CPU ${resources.cpuPercent.toFixed(1)}%`);
+  if (resources.memoryBytes) parts.push(`Memory ${formatBytes(resources.memoryBytes)}`);
+  if (resources.encoder) parts.push(resources.encoder);
+  if (!parts.length) return "";
+  return `<div class="resource-line">${parts.map(escapeHtml).join(" · ")}</div>`;
+}
+
+function statusClass(status) {
+  if (status === "running") return "live";
+  if (status === "scheduled") return "scheduled";
+  return "stopped";
+}
+
+function statusLabel(status) {
+  if (status === "running") return "LIVE";
+  if (status === "scheduled") return "SCHEDULED";
+  return "STOP";
+}
+
+function videoSource(video) {
+  return `${apiBase}/api/videos/file?key=${encodeURIComponent(video.key)}`;
+}
+
+function formatDuration(seconds) {
+  if (!seconds) return "Preview";
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${rest}`;
 }
 
 async function api(path, options = {}) {

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const PLATFORM_SERVERS = {
@@ -28,6 +29,7 @@ export class StreamManager {
       startedAt: job.startedAt,
       status: job.status,
       exitCode: job.exitCode ?? null,
+      resources: readProcessResources(job.child.pid, job.log),
       log: job.log.slice(-80)
     }));
   }
@@ -206,6 +208,36 @@ function buildVideoEncoderArgs(encoder) {
     "-bufsize",
     "3600k"
   ];
+}
+
+function readProcessResources(pid, log) {
+  const encoder = log.some((line) => line.includes("h264_nvenc"))
+    ? "NVIDIA NVENC"
+    : log.some((line) => line.includes("libx264"))
+      ? "CPU x264"
+      : null;
+
+  if (!pid || process.platform !== "win32") {
+    return { encoder };
+  }
+
+  try {
+    const script = [
+      "$pidValue = [int]$args[0]",
+      "$process = Get-Process -Id $pidValue -ErrorAction Stop",
+      "$counter = Get-Counter \"\\Process($($process.ProcessName)*)\\% Processor Time\" -ErrorAction SilentlyContinue",
+      "$cpu = 0",
+      "foreach ($sample in $counter.CounterSamples) { if ($sample.InstanceName -like \"$($process.ProcessName)*\") { $cpu = [math]::Max($cpu, $sample.CookedValue) } }",
+      "[pscustomobject]@{ cpuPercent = [math]::Round($cpu / [Environment]::ProcessorCount, 1); memoryBytes = $process.WorkingSet64 } | ConvertTo-Json -Compress"
+    ].join("; ");
+    const output = execFileSync("powershell.exe", ["-NoProfile", "-Command", script, String(pid)], {
+      windowsHide: true,
+      timeout: 2500
+    }).toString();
+    return { encoder, ...JSON.parse(output) };
+  } catch {
+    return { encoder };
+  }
 }
 
 function createId() {
