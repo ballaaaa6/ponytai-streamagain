@@ -151,7 +151,7 @@ function renderStorage() {
 function renderVideoSelect() {
   elements.videoSelect.innerHTML = "";
   if (!state.videos.length) {
-    elements.videoSelect.append(new Option("No R2 videos uploaded yet", ""));
+    elements.videoSelect.append(new Option("No B2 videos uploaded yet", ""));
     return;
   }
   for (const video of state.videos) {
@@ -254,12 +254,12 @@ async function uploadVideo(event) {
   const file = event.target?.files?.[0] || event.file;
   if (!file) return;
   if (state.storage.usedBytes + file.size > state.storage.limitBytes) {
-    showToast("The 5GB R2 storage limit would be exceeded.");
+    showToast("The 5GB B2 storage limit would be exceeded.");
     return;
   }
 
   try {
-    showToast("Uploading video to Cloudflare R2...");
+    showToast("Uploading video to Backblaze B2...");
     await fetch(`${apiBase}/api/videos/upload?name=${encodeURIComponent(file.name)}`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
@@ -269,7 +269,7 @@ async function uploadVideo(event) {
       if (!response.ok) throw new Error(data.error || "Upload failed.");
       return data;
     });
-    showToast("Video uploaded to R2.");
+    showToast("Video uploaded to B2.");
     elements.uploadDialog.close();
     await loadVideos();
   } catch (error) {
@@ -302,7 +302,7 @@ function renderVideos() {
         <div>
           <div class="empty-box"></div>
           <strong>No video found</strong>
-          <div>Upload to Cloudflare R2, capped at 5GB total.</div>
+          <div>Upload to Backblaze B2, capped at 5GB total.</div>
           <button class="primary inline-action" type="button" data-empty-upload>Browse videos</button>
         </div>
       </div>
@@ -380,7 +380,7 @@ async function importVideoUrl(event) {
   }
 
   try {
-    showToast("Importing video to R2...");
+    showToast("Importing video to B2...");
     await api("/api/videos/import-url", {
       method: "POST",
       body: JSON.stringify({ url, name })

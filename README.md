@@ -1,17 +1,17 @@
 # Ponytai StreamAgain
 
-Ponytai StreamAgain is a Cloudflare-hosted control panel for rerunning local video files to RTMP destinations. Videos are stored in Cloudflare R2 with an application cap of 5GB. A Windows PC agent downloads queued videos from R2 and runs FFmpeg locally.
+Ponytai StreamAgain is a Cloudflare-hosted control panel for rerunning local video files to RTMP destinations. Videos are stored in Backblaze B2 with an application cap of 5GB. A Windows PC agent downloads queued videos from B2 and runs FFmpeg locally.
 
 ## How It Works
 
 - Cloudflare Pages hosts the web control panel.
 - Cloudflare Pages Functions provide the API.
-- Cloudflare R2 stores uploaded videos and control data.
+- Backblaze B2 stores uploaded videos and control data.
 - The Windows PC agent polls Cloudflare for queued stream jobs.
 - FFmpeg runs on the PC and streams to YouTube, Facebook, Twitch, TikTok, or custom RTMP.
 - The default FFmpeg mode uses `-c copy` to avoid re-encoding and reduce CPU usage.
 
-Cloudflare Pages, Workers, and R2 do not replace the FFmpeg streaming machine. The PC or a VPS is still required for long-running RTMP output.
+Cloudflare Pages, Functions, and object storage do not replace the FFmpeg streaming machine. The PC or a VPS is still required for long-running RTMP output.
 
 ## Fast Setup
 
@@ -48,16 +48,18 @@ npm.cmd run agent
 
 In Windows Command Prompt, use `cd /d` when changing drives.
 
-## Cloudflare R2 Storage Cap
+## Backblaze B2 Storage Cap
 
-The app caps video storage at 5GB total to stay comfortably under the free-tier storage allowance. The UI shows used space, remaining space, and upload rejection when the limit would be exceeded.
+The app caps video storage at 5GB total to stay comfortably under free storage. The UI shows used space, remaining space, and upload rejection when the limit would be exceeded.
 
 ## Cloudflare Pages Settings
 
 - Build command: leave empty
 - Build output directory: `web`
-- R2 binding: `VIDEO_BUCKET`
-- R2 bucket name: `ponytai-streamagain-videos`
+- Secrets required:
+  - `B2_KEY_ID`
+  - `B2_APPLICATION_KEY`
+  - `B2_BUCKET_NAME`
 
 ## File Compatibility
 

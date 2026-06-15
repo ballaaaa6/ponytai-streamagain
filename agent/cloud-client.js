@@ -41,7 +41,7 @@ export class CloudClient {
     if (this.localByCloud.has(job.id)) return;
 
     try {
-      await this.updateJob(job.id, "downloading", "Downloading video from R2.");
+      await this.updateJob(job.id, "downloading", "Downloading video from B2.");
       const file = await this.downloadVideo(job);
       const { id: localJobId } = this.manager.start({
         title: job.title,
