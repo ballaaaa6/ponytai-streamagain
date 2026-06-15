@@ -1,82 +1,70 @@
 # Ponytai StreamAgain
 
-เว็บแอพสำหรับรีรันวิดีโอไปยัง stream key หลายปลายทาง โดยหน้าเว็บสามารถ deploy บน Cloudflare Pages ได้ และให้เครื่องของคุณรัน local agent เพื่อเลือกวิดีโอจากเครื่องกับยิง FFmpeg ออกไปยัง RTMP/stream key
+Ponytai StreamAgain is a Cloudflare-hosted control panel for rerunning local video files to RTMP destinations. Videos are stored in Cloudflare R2 with an application cap of 5GB. A Windows PC agent downloads queued videos from R2 and runs FFmpeg locally.
 
-## ทำงานยังไง
+## How It Works
 
-- Cloudflare Pages: โฮสต์หน้าเว็บ control panel
-- เครื่องคุณ: รัน local agent ที่ `http://localhost:8787`
-- FFmpeg: อ่านไฟล์วิดีโอจากโฟลเดอร์ในเครื่อง แล้วส่งไป YouTube, Facebook, Twitch, TikTok หรือ RTMP custom
-- Default stream mode: ใช้ `-c copy` เพื่อส่งไฟล์ออกไปโดยไม่ re-encode ช่วยประหยัด CPU
+- Cloudflare Pages hosts the web control panel.
+- Cloudflare Pages Functions provide the API.
+- Cloudflare R2 stores uploaded videos and control data.
+- The Windows PC agent polls Cloudflare for queued stream jobs.
+- FFmpeg runs on the PC and streams to YouTube, Facebook, Twitch, TikTok, or custom RTMP.
+- The default FFmpeg mode uses `-c copy` to avoid re-encoding and reduce CPU usage.
 
-Cloudflare Pages/Workers ไม่สามารถอ่านไฟล์วิดีโอในคอมคุณโดยตรงและไม่เหมาะกับการรัน FFmpeg ตลอดเวลา ดังนั้นงานสตรีมจริงต้องรันบนเครื่องคุณหรือ VPS ภายหลัง
+Cloudflare Pages, Workers, and R2 do not replace the FFmpeg streaming machine. The PC or a VPS is still required for long-running RTMP output.
 
-## เริ่มใช้งานบนเครื่อง
+## Fast Setup
 
-1. ติดตั้ง Node.js และ FFmpeg
-2. ตั้งค่า `.env` จาก `.env.example`
-3. วางวิดีโอไว้ในโฟลเดอร์ที่ตั้งใน `VIDEO_ROOT` หรืออัพโหลดผ่านหน้า `Videos`
-4. รัน:
+1. Install Node.js and FFmpeg.
+2. Deploy the Cloudflare Pages app.
+3. Install the Windows startup agent:
 
 ```powershell
-npm.cmd run start
+cd /d D:\antigravity\streamagain
+npm.cmd run install-startup
 ```
 
-แล้วเปิดเว็บที่:
+4. Open the web app:
 
 ```text
-http://localhost:5173
+https://ponytai-streamagain.pages.dev
 ```
 
-## Deploy หน้าเว็บบน Cloudflare Pages
+5. Upload videos in the `Videos` page.
+6. Create a stream in `New live stream`.
+7. Add a destination stream key.
+8. Click `Start Livestream`.
 
-อัพโหลดโฟลเดอร์นี้ขึ้น GitHub แล้วเชื่อม Cloudflare Pages
+If the PC agent is offline, jobs can still be queued in the cloud. FFmpeg starts when the PC agent comes online.
 
-- Build command: เว้นว่าง
+## Manual Agent Command
+
+Use this only if the startup task is not installed:
+
+```powershell
+cd /d D:\antigravity\streamagain
+npm.cmd run agent
+```
+
+In Windows Command Prompt, use `cd /d` when changing drives.
+
+## Cloudflare R2 Storage Cap
+
+The app caps video storage at 5GB total to stay comfortably under the free-tier storage allowance. The UI shows used space, remaining space, and upload rejection when the limit would be exceeded.
+
+## Cloudflare Pages Settings
+
+- Build command: leave empty
 - Build output directory: `web`
+- R2 binding: `VIDEO_BUCKET`
+- R2 bucket name: `ponytai-streamagain-videos`
 
-เวลาเปิดเว็บจาก Cloudflare ให้เปิด local agent บนเครื่องคุณไว้ด้วย:
+## File Compatibility
 
-```powershell
-npm.cmd run agent
-```
+Copy mode is efficient but expects platform-compatible media. MP4 with H.264 video and AAC audio is the safest choice. If a platform rejects a file, transcode the file first or add a future transcoding preset.
 
-จากนั้นเปิด:
+## Security Notes
 
-```text
-https://ponytai-streamagain.pages.dev
-```
-
-ถ้าหน้าเว็บขึ้น `Agent offline` ให้กด refresh หลังจากเปิด local agent แล้ว
-
-## ใช้งานจริงแบบเร็ว
-
-1. เปิด local agent:
-
-```powershell
-cd D:\antigravity\streamagain
-npm.cmd run agent
-```
-
-2. เปิดเว็บ:
-
-```text
-https://ponytai-streamagain.pages.dev
-```
-
-3. ไปหน้า `Videos` แล้วอัพโหลดไฟล์วิดีโอ
-4. กลับหน้า `New live stream`
-5. กด `+ Add Destination` แล้วใส่ stream key
-6. เลือกวิดีโอ แล้วกด `Start Livestream`
-
-หมายเหตุ: โหมด `copy` ต้องใช้ไฟล์ที่แพลตฟอร์มรับได้ เช่น MP4 ที่เป็น H.264 + AAC ถ้าไฟล์ไม่ compatible ให้แปลงไฟล์ก่อน หรือเพิ่ม transcoding preset ภายหลัง
-
-## หมายเหตุเรื่องความปลอดภัย
-
-- Stream key จะถูกส่งไปที่ local agent บนเครื่องคุณเท่านั้น
-- อย่าแชร์หน้าจอหรือไฟล์ `.env` ที่มี key
-- local agent อนุญาตให้อ่านเฉพาะไฟล์ใน `VIDEO_ROOT`
-
-## ขีดจำกัด
-
-จำนวนช่องไม่ล็อกในแอพ แต่จะจำกัดตาม CPU/GPU, ความเร็วเน็ตอัพโหลด, bitrate และจำนวน FFmpeg process ที่เครื่องรับไหว
+- Stream keys are stored in Cloudflare control data for queued jobs.
+- Do not share the public app URL with people you do not trust.
+- A future production version should add authentication before public use.

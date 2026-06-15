@@ -4,9 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { StreamManager } from "./stream-manager.js";
+import { CloudClient } from "./cloud-client.js";
 
 const config = loadConfig();
 const manager = new StreamManager(config);
+const cloudClient = new CloudClient(config, manager);
 
 const server = http.createServer(async (req, res) => {
   setCors(res);
@@ -85,6 +87,8 @@ const server = http.createServer(async (req, res) => {
 server.listen(config.port, () => {
   console.log(`Ponytai local agent running at http://localhost:${config.port}`);
   console.log(`Video root: ${config.videoRoot}`);
+  console.log(`Cloud API: ${config.cloudApiUrl}`);
+  cloudClient.start();
 });
 
 function setCors(res) {

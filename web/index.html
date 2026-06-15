@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="th">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -38,27 +38,28 @@
 
       <section class="stats">
         <div class="stat">
-          <span>Plan</span>
-          <strong>Local Free</strong>
+          <span>Mode</span>
+          <strong>Cloud + PC</strong>
         </div>
         <div class="stat">
           <span>Running</span>
           <strong id="runningCount">0</strong>
         </div>
         <div class="stat">
-          <span>Limit</span>
-          <strong>No app cap</strong>
+          <span>R2 storage</span>
+          <strong id="storageText">0 B / 5 GB</strong>
+          <div class="storage-meter"><span id="storageBar"></span></div>
         </div>
       </section>
 
       <section id="offlineNotice" class="notice warning" hidden>
-        <strong>Agent offline</strong>
-        <span>เปิด local agent ก่อนใช้งานจริง: cd D:\antigravity\streamagain แล้วรัน npm.cmd run agent</span>
+        <strong>PC agent offline</strong>
+        <span>The cloud app can queue work, but FFmpeg starts only when the Windows agent is online.</span>
       </section>
 
       <section class="notice">
-        <strong>Ready for local rerun</strong>
-        <span>เว็บอยู่บน Cloudflare ส่วน FFmpeg ยิงจากคอมนี้ด้วยโหมด copy เพื่อลด CPU</span>
+        <strong>Ready for mobile control</strong>
+        <span>Videos live in Cloudflare R2. The PC agent downloads them and streams with FFmpeg copy mode.</span>
       </section>
 
       <section class="panel view active" data-view="stream">
@@ -70,13 +71,13 @@
         <form id="streamForm" class="stream-form">
           <label>
             <span>Title</span>
-            <input id="titleInput" name="title" required placeholder="ตั้งชื่อไลฟ์">
+            <input id="titleInput" name="title" required placeholder="Enter a stream title">
           </label>
 
           <label>
             <span>Video Selection</span>
             <select id="videoSelect" name="file" required>
-              <option value="">กำลังโหลดวิดีโอ...</option>
+              <option value="">Loading R2 videos...</option>
             </select>
           </label>
 
@@ -186,7 +187,7 @@
             <input id="dialogVideoInput" type="file" accept=".mp4,.mov,.mkv,.webm,.avi,.m4v,video/*">
             Select file from device
           </label>
-          <small>รองรับ MP4, MOV, MKV, WEBM, AVI, M4V</small>
+          <small>Supported: MP4, MOV, MKV, WEBM, AVI, M4V. Total storage is capped at 5GB.</small>
         </div>
         <div id="urlUploadPane" class="url-pane hidden">
           <label>

@@ -11,6 +11,7 @@ const required = [
   "web/index.html",
   "web/styles.css",
   "web/app.js",
+  "functions/api/[[path]].js",
   "agent/server.js"
 ];
 

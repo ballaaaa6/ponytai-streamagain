@@ -1,9 +1,18 @@
-let agentUrl = localStorage.getItem("agentUrl") || "http://localhost:8787";
+const apiBase = window.location.origin.startsWith("http") ? "" : "http://localhost:8787";
+
 const state = {
   destinations: [],
   selectedPlatform: "youtube",
   videos: [],
-  history: JSON.parse(localStorage.getItem("streamHistory") || "[]")
+  history: [],
+  streams: [],
+  storage: {
+    usedBytes: 0,
+    limitBytes: 5 * 1024 * 1024 * 1024,
+    remainingBytes: 5 * 1024 * 1024 * 1024,
+    usagePercent: 0
+  },
+  agent: null
 };
 
 const elements = {
@@ -12,6 +21,9 @@ const elements = {
   agentRoot: document.querySelector("#agentRoot"),
   refreshButton: document.querySelector("#refreshButton"),
   runningCount: document.querySelector("#runningCount"),
+  storageText: document.querySelector("#storageText"),
+  storageBar: document.querySelector("#storageBar"),
+  offlineNotice: document.querySelector("#offlineNotice"),
   videoSelect: document.querySelector("#videoSelect"),
   streamForm: document.querySelector("#streamForm"),
   destinationList: document.querySelector("#destinationList"),
@@ -23,105 +35,127 @@ const elements = {
   serverUrlInput: document.querySelector("#serverUrlInput"),
   streamKeyInput: document.querySelector("#streamKeyInput"),
   streamsList: document.querySelector("#streamsList"),
-  toast: document.querySelector("#toast")
+  toast: document.querySelector("#toast"),
+  viewButtons: document.querySelectorAll("[data-view-button]"),
+  views: document.querySelectorAll("[data-view]"),
+  videosList: document.querySelector("#videosList"),
+  historyList: document.querySelector("#historyList"),
+  clearHistoryButton: document.querySelector("#clearHistoryButton"),
+  openUploadButton: document.querySelector("#openUploadButton"),
+  uploadDialog: document.querySelector("#uploadDialog"),
+  uploadForm: document.querySelector("#uploadForm"),
+  dialogVideoInput: document.querySelector("#dialogVideoInput"),
+  deviceUploadPane: document.querySelector("#deviceUploadPane"),
+  urlUploadPane: document.querySelector("#urlUploadPane"),
+  videoUrlInput: document.querySelector("#videoUrlInput"),
+  videoUrlNameInput: document.querySelector("#videoUrlNameInput"),
+  uploadModeButtons: document.querySelectorAll("[data-upload-mode]"),
+  historyFilterButtons: document.querySelectorAll("[data-history-filter]")
 };
-
-elements.offlineNotice = document.querySelector("#offlineNotice");
-elements.viewButtons = document.querySelectorAll("[data-view-button]");
-elements.views = document.querySelectorAll("[data-view]");
-elements.videoUploadInput = document.querySelector("#videoUploadInput");
-elements.videosList = document.querySelector("#videosList");
-elements.historyList = document.querySelector("#historyList");
-elements.clearHistoryButton = document.querySelector("#clearHistoryButton");
-elements.settingsForm = document.querySelector("#settingsForm");
-elements.agentUrlInput = document.querySelector("#agentUrlInput");
-elements.openUploadButton = document.querySelector("#openUploadButton");
-elements.uploadDialog = document.querySelector("#uploadDialog");
-elements.uploadForm = document.querySelector("#uploadForm");
-elements.dialogVideoInput = document.querySelector("#dialogVideoInput");
-elements.deviceUploadPane = document.querySelector("#deviceUploadPane");
-elements.urlUploadPane = document.querySelector("#urlUploadPane");
-elements.videoUrlInput = document.querySelector("#videoUrlInput");
-elements.videoUrlNameInput = document.querySelector("#videoUrlNameInput");
-elements.uploadModeButtons = document.querySelectorAll("[data-upload-mode]");
-elements.historyFilterButtons = document.querySelectorAll("[data-history-filter]");
 
 elements.refreshButton.addEventListener("click", refresh);
 elements.addDestinationButton.addEventListener("click", () => elements.destinationDialog.showModal());
 elements.platformButtons.addEventListener("click", selectPlatform);
 elements.destinationForm.addEventListener("submit", addDestination);
 elements.streamForm.addEventListener("submit", startStream);
-elements.videoUploadInput.addEventListener("change", uploadVideo);
 elements.dialogVideoInput.addEventListener("change", uploadVideo);
 elements.openUploadButton.addEventListener("click", () => elements.uploadDialog.showModal());
 elements.uploadForm.addEventListener("submit", importVideoUrl);
 elements.clearHistoryButton.addEventListener("click", clearHistory);
-elements.settingsForm.addEventListener("submit", saveSettings);
 elements.uploadModeButtons.forEach((button) => {
   button.addEventListener("click", () => setUploadMode(button.dataset.uploadMode));
 });
 elements.historyFilterButtons.forEach((button) => {
   button.addEventListener("click", () => setHistoryFilter(button.dataset.historyFilter));
 });
-setupDropUpload(elements.videosList);
-setupDropUpload(elements.deviceUploadPane);
 elements.viewButtons.forEach((button) => {
   button.addEventListener("click", () => showView(button.dataset.viewButton));
 });
-elements.agentUrlInput.value = agentUrl;
+setupDropUpload(elements.videosList);
+setupDropUpload(elements.deviceUploadPane);
 
 refresh();
-setInterval(refreshStreams, 4000);
+setInterval(refresh, 5000);
 
 async function refresh() {
-  await Promise.all([checkAgent(), loadVideos(), refreshStreams()]);
+  await Promise.all([loadHealth(), loadVideos(), refreshStreams(), loadHistory()]);
 }
 
-async function checkAgent() {
+async function loadHealth() {
   try {
     const health = await api("/api/health");
-    elements.agentDot.classList.add("online");
-    elements.agentLabel.textContent = "Agent online";
-    elements.agentRoot.textContent = health.videoRoot;
-    elements.offlineNotice.hidden = true;
+    state.storage = health.storage || state.storage;
+    state.agent = health.agent;
+    renderStorage();
+    renderAgent();
   } catch {
-    elements.agentDot.classList.remove("online");
-    elements.agentLabel.textContent = "Agent offline";
-    elements.agentRoot.textContent = agentUrl;
-    elements.offlineNotice.hidden = false;
+    state.agent = null;
+    renderAgent();
   }
 }
 
 async function loadVideos() {
   try {
-    const { videos } = await api("/api/videos");
-    state.videos = videos;
-    elements.videoSelect.innerHTML = "";
-    if (!videos.length) {
-      elements.videoSelect.append(new Option("ยังไม่มีวิดีโอใน VIDEO_ROOT", ""));
-      renderVideos();
-      return;
-    }
-    for (const video of videos) {
-      elements.videoSelect.append(new Option(`${video.name} (${formatBytes(video.size)})`, video.relativePath));
-    }
+    const summary = await api("/api/videos");
+    state.videos = summary.videos || [];
+    state.storage = {
+      usedBytes: summary.usedBytes,
+      limitBytes: summary.limitBytes,
+      remainingBytes: summary.remainingBytes,
+      usagePercent: summary.usagePercent
+    };
+    renderStorage();
+    renderVideoSelect();
     renderVideos();
-  } catch {
-    state.videos = [];
-    elements.videoSelect.innerHTML = "";
-    elements.videoSelect.append(new Option("เปิด local agent ก่อน", ""));
-    renderVideos();
+  } catch (error) {
+    showToast(error.message);
   }
 }
 
 async function refreshStreams() {
   try {
     const { streams } = await api("/api/streams");
-    elements.runningCount.textContent = streams.filter((stream) => stream.status === "running").length;
-    renderStreams(streams);
+    state.streams = streams || [];
+    elements.runningCount.textContent = state.streams.filter((stream) => stream.status === "running").length;
+    renderStreams();
   } catch {
     elements.runningCount.textContent = "0";
-    elements.streamsList.innerHTML = `<p class="empty">ยังเชื่อม local agent ไม่ได้</p>`;
+    elements.streamsList.innerHTML = `<p class="empty">Cloud API is not reachable.</p>`;
+  }
+}
+
+async function loadHistory() {
+  try {
+    const { history } = await api("/api/history");
+    state.history = history || [];
+    renderHistory();
+  } catch {
+    state.history = [];
+    renderHistory();
+  }
+}
+
+function renderAgent() {
+  const isFresh = state.agent?.updatedAt && Date.now() - new Date(state.agent.updatedAt).getTime() < 30000;
+  elements.agentDot.classList.toggle("online", Boolean(isFresh));
+  elements.agentLabel.textContent = isFresh ? "PC agent online" : "PC agent offline";
+  elements.agentRoot.textContent = isFresh ? `${state.agent.name} · ${new Date(state.agent.updatedAt).toLocaleTimeString()}` : "Waiting for the Windows startup agent";
+  elements.offlineNotice.hidden = Boolean(isFresh);
+}
+
+function renderStorage() {
+  elements.storageText.textContent = `${formatBytes(state.storage.usedBytes)} / ${formatBytes(state.storage.limitBytes)}`;
+  elements.storageBar.style.width = `${Math.min(100, state.storage.usagePercent || 0)}%`;
+}
+
+function renderVideoSelect() {
+  elements.videoSelect.innerHTML = "";
+  if (!state.videos.length) {
+    elements.videoSelect.append(new Option("No R2 videos uploaded yet", ""));
+    return;
+  }
+  for (const video of state.videos) {
+    elements.videoSelect.append(new Option(`${video.name} (${formatBytes(video.size)})`, video.key));
   }
 }
 
@@ -143,7 +177,7 @@ function addDestination(event) {
 
   if (!streamKey) return;
   if ((state.selectedPlatform === "rtmp" || state.selectedPlatform === "tiktok") && !serverUrl) {
-    showToast("ใส่ Server URL ก่อน");
+    showToast("Enter a server URL first.");
     return;
   }
 
@@ -163,7 +197,7 @@ function addDestination(event) {
 function renderDestinations() {
   elements.destinationList.innerHTML = "";
   if (!state.destinations.length) {
-    elements.destinationList.innerHTML = `<p class="empty">ยังไม่มี destination</p>`;
+    elements.destinationList.innerHTML = `<p class="empty">No destination added yet.</p>`;
     return;
   }
 
@@ -188,7 +222,7 @@ function renderDestinations() {
 async function startStream(event) {
   event.preventDefault();
   if (!state.destinations.length) {
-    showToast("เพิ่ม destination ก่อน");
+    showToast("Add at least one destination first.");
     return;
   }
 
@@ -205,18 +239,12 @@ async function startStream(event) {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    addHistory({
-      title: payload.title,
-      file: payload.file,
-      destinations: payload.destinations.map((destination) => destination.label),
-      repeat: payload.repeat,
-      startedAt: new Date().toISOString()
-    });
-    showToast("เริ่มไลฟ์แล้ว");
+    showToast("Stream queued. The PC agent will start FFmpeg.");
     elements.streamForm.reset();
     state.destinations = [];
     renderDestinations();
     await refreshStreams();
+    await loadHistory();
   } catch (error) {
     showToast(error.message);
   }
@@ -225,10 +253,14 @@ async function startStream(event) {
 async function uploadVideo(event) {
   const file = event.target?.files?.[0] || event.file;
   if (!file) return;
+  if (state.storage.usedBytes + file.size > state.storage.limitBytes) {
+    showToast("The 5GB R2 storage limit would be exceeded.");
+    return;
+  }
 
   try {
-    showToast("กำลังอัพโหลดวิดีโอเข้า local agent...");
-    await fetch(`${agentUrl}/api/videos/upload?name=${encodeURIComponent(file.name)}`, {
+    showToast("Uploading video to Cloudflare R2...");
+    await fetch(`${apiBase}/api/videos/upload?name=${encodeURIComponent(file.name)}`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: file
@@ -237,13 +269,13 @@ async function uploadVideo(event) {
       if (!response.ok) throw new Error(data.error || "Upload failed.");
       return data;
     });
-    showToast("อัพโหลดวิดีโอแล้ว");
+    showToast("Video uploaded to R2.");
     elements.uploadDialog.close();
     await loadVideos();
   } catch (error) {
     showToast(error.message);
   } finally {
-    event.target.value = "";
+    if (event.target) event.target.value = "";
   }
 }
 
@@ -258,8 +290,7 @@ function setupDropUpload(target) {
   target.addEventListener("drop", (event) => {
     event.preventDefault();
     target.classList.remove("dragging");
-    const file = event.dataTransfer?.files?.[0];
-    uploadVideo({ file, target: { value: "" } });
+    uploadVideo({ file: event.dataTransfer?.files?.[0] });
   });
 }
 
@@ -271,7 +302,7 @@ function renderVideos() {
         <div>
           <div class="empty-box"></div>
           <strong>No video found</strong>
-          <div>Drag & drop your videos here or hit the Browse videos button.</div>
+          <div>Upload to Cloudflare R2, capped at 5GB total.</div>
           <button class="primary inline-action" type="button" data-empty-upload>Browse videos</button>
         </div>
       </div>
@@ -286,23 +317,26 @@ function renderVideos() {
     row.innerHTML = `
       <div>
         <strong>${escapeHtml(video.name)}</strong>
-        <div>${formatBytes(video.size)} · ${escapeHtml(video.relativePath)}</div>
+        <div>${formatBytes(video.size)} · ${escapeHtml(video.key)}</div>
       </div>
-      <button class="secondary" type="button">Use</button>
+      <div class="row-actions">
+        <button class="secondary" type="button" data-use>Use</button>
+        <button class="danger" type="button" data-delete>Delete</button>
+      </div>
     `;
-    row.querySelector("button").addEventListener("click", () => {
-      elements.videoSelect.value = video.relativePath;
+    row.querySelector("[data-use]").addEventListener("click", () => {
+      elements.videoSelect.value = video.key;
       showView("stream");
     });
+    row.querySelector("[data-delete]").addEventListener("click", () => deleteVideo(video.key));
     elements.videosList.append(row);
   }
 }
 
-function addHistory(item) {
-  state.history.unshift(item);
-  state.history = state.history.slice(0, 50);
-  localStorage.setItem("streamHistory", JSON.stringify(state.history));
-  renderHistory();
+async function deleteVideo(key) {
+  await api(`/api/videos?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+  showToast("Video deleted.");
+  await loadVideos();
 }
 
 function renderHistory() {
@@ -313,7 +347,7 @@ function renderHistory() {
         <div>
           <div class="empty-box"></div>
           <strong>No history found</strong>
-          <div>Do you want to create a new live stream?</div>
+          <div>Create a new live stream from the control panel.</div>
           <button class="primary inline-action" type="button" data-new-stream>+ New live stream</button>
         </div>
       </div>
@@ -328,7 +362,7 @@ function renderHistory() {
     row.innerHTML = `
       <div>
         <strong>${escapeHtml(item.title)}</strong>
-        <div>${new Date(item.startedAt).toLocaleString()} · ${escapeHtml(item.file)} · ${item.destinations.length} destination</div>
+        <div>${new Date(item.historyAt || item.startedAt).toLocaleString()} · ${escapeHtml(item.file)} · ${escapeHtml(item.status || item.event || "created")}</div>
       </div>
     `;
     elements.historyList.append(row);
@@ -341,12 +375,12 @@ async function importVideoUrl(event) {
   const url = elements.videoUrlInput.value.trim();
   const name = elements.videoUrlNameInput.value.trim();
   if (!url) {
-    showToast("ใส่ Video URL ก่อน");
+    showToast("Enter a video URL first.");
     return;
   }
 
   try {
-    showToast("กำลังดึงวิดีโอจาก URL เข้า local agent...");
+    showToast("Importing video to R2...");
     await api("/api/videos/import-url", {
       method: "POST",
       body: JSON.stringify({ url, name })
@@ -354,7 +388,7 @@ async function importVideoUrl(event) {
     elements.videoUrlInput.value = "";
     elements.videoUrlNameInput.value = "";
     elements.uploadDialog.close();
-    showToast("Import วิดีโอแล้ว");
+    showToast("Video imported.");
     await loadVideos();
   } catch (error) {
     showToast(error.message);
@@ -376,18 +410,10 @@ function setHistoryFilter(filter) {
   renderHistory();
 }
 
-function clearHistory() {
+async function clearHistory() {
   state.history = [];
-  localStorage.removeItem("streamHistory");
   renderHistory();
-}
-
-function saveSettings(event) {
-  event.preventDefault();
-  agentUrl = elements.agentUrlInput.value.trim() || "http://localhost:8787";
-  localStorage.setItem("agentUrl", agentUrl);
-  showToast("บันทึก Agent URL แล้ว");
-  refresh();
+  showToast("History is stored in Cloudflare and will rotate automatically.");
 }
 
 function showView(name) {
@@ -399,14 +425,14 @@ function showView(name) {
   });
 }
 
-function renderStreams(streams) {
+function renderStreams() {
   elements.streamsList.innerHTML = "";
-  if (!streams.length) {
-    elements.streamsList.innerHTML = `<p class="empty">ยังไม่มี stream ที่รันอยู่</p>`;
+  if (!state.streams.length) {
+    elements.streamsList.innerHTML = `<p class="empty">No queued or running streams.</p>`;
     return;
   }
 
-  for (const stream of streams) {
+  for (const stream of state.streams) {
     const card = document.createElement("div");
     card.className = "stream-card";
     card.innerHTML = `
@@ -414,7 +440,7 @@ function renderStreams(streams) {
         <strong>${escapeHtml(stream.title)}</strong>
         <div>${escapeHtml(stream.file)} · ${escapeHtml(stream.status)} · ${stream.destinations.length} destination</div>
       </div>
-      <button class="secondary" type="button" ${stream.status !== "running" ? "disabled" : ""}>Stop</button>
+      <button class="secondary" type="button" ${["stopped", "error"].includes(stream.status) ? "disabled" : ""}>Stop</button>
     `;
     card.querySelector("button").addEventListener("click", async () => {
       await api(`/api/streams/${stream.id}/stop`, { method: "POST" });
@@ -425,8 +451,8 @@ function renderStreams(streams) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(`${agentUrl}${path}`, {
-    headers: { "Content-Type": "application/json" },
+  const response = await fetch(`${apiBase}${path}`, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options
   });
   const data = await response.json();
@@ -445,11 +471,11 @@ function platformLabel(platform) {
 }
 
 function maskKey(key) {
-  if (key.length <= 8) return "••••";
+  if (key.length <= 8) return "masked";
   return `${key.slice(0, 4)}••••${key.slice(-4)}`;
 }
 
-function formatBytes(bytes) {
+function formatBytes(bytes = 0) {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let value = bytes;
   let unit = 0;
@@ -466,7 +492,7 @@ function showToast(message) {
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => {
     elements.toast.hidden = true;
-  }, 3200);
+  }, 3600);
 }
 
 function escapeHtml(value) {

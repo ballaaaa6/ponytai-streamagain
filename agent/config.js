@@ -15,7 +15,10 @@ export function loadConfig() {
     port: Number(process.env.PORT || 8787),
     ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg",
     videoRoot,
-    dataDir
+    dataDir,
+    cloudApiUrl: process.env.CLOUD_API_URL || "https://ponytai-streamagain.pages.dev",
+    cloudAgentName: process.env.CLOUD_AGENT_NAME || "desktop-agent",
+    cloudPollMs: Number(process.env.CLOUD_POLL_MS || 5000)
   };
 }
 

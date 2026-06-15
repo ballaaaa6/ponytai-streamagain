@@ -1,17 +1,18 @@
 # Contributing
 
-ขอบคุณที่ช่วยพัฒนา Ponytai StreamAgain
+Thanks for helping improve Ponytai StreamAgain.
 
-## แนวทาง
+## Guidelines
 
-- แก้ให้เล็กและชัดก่อน
-- อย่า commit stream key, token, หรือไฟล์ `.env`
-- ทดสอบด้วย `npm.cmd run check`
-- ถ้าแตะ agent ให้ลองเริ่ม/หยุด stream อย่างน้อยหนึ่งงาน
+- Keep changes small and focused.
+- Do not commit stream keys, tokens, or `.env` files.
+- Run `npm.cmd run check` before committing.
+- When changing the agent, test at least one start or stop path.
 
-## โครงสร้าง
+## Project Structure
 
-- `web/` หน้าเว็บที่ deploy บน Cloudflare Pages ได้
-- `agent/` local agent ที่รันบนเครื่องผู้ใช้
-- `scripts/` เครื่องมือช่วยรันและตรวจงาน
-- `docs/` เอกสารแนวคิดและ TODO เชิงเทคนิค
+- `web/` contains the Cloudflare Pages frontend.
+- `functions/` contains the Cloudflare Pages Functions API.
+- `agent/` contains the Windows local FFmpeg agent.
+- `scripts/` contains setup and validation scripts.
+- `docs/` contains architecture notes.

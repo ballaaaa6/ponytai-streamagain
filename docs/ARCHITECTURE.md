@@ -1,20 +1,24 @@
 # Architecture
 
-Ponytai StreamAgain แยกเป็นสองส่วน
+Ponytai StreamAgain is split into three parts.
 
-## Web control panel
+## Cloudflare Control Plane
 
-อยู่ใน `web/` และเป็น static app deploy บน Cloudflare Pages ได้ ไม่มี server-side runtime บน Cloudflare
+The `web/` directory is a static Cloudflare Pages app. It calls same-origin API routes from `functions/`.
 
-## Local agent
+## Cloudflare R2
 
-อยู่ใน `agent/` และรันบนเครื่องผู้ใช้ ใช้ Node.js เปิด HTTP API ที่ `localhost:8787` เพื่อ:
+R2 stores uploaded videos and small JSON control documents:
 
-- อ่านรายการวิดีโอจาก `VIDEO_ROOT`
-- สร้าง RTMP URL จาก platform และ stream key
-- spawn FFmpeg process
-- ติดตามสถานะและหยุดงาน stream
+- video objects under `videos/`
+- queued jobs under `_control/jobs.json`
+- agent heartbeat under `_control/agent.json`
+- stream history under `_control/history.json`
 
-## Why local agent is required
+The application enforces a 5GB storage cap before uploads and imports.
 
-Browser และ Cloudflare Pages ไม่สามารถส่ง path จริงของไฟล์ในเครื่องให้ FFmpeg ได้ และ Cloudflare Workers ไม่เหมาะกับงาน long-running video streaming ดังนั้น FFmpeg ต้องรันบนเครื่องผู้ใช้หรือ VPS
+## Windows PC Agent
+
+The `agent/` directory runs on the user's PC. It polls Cloudflare for queued jobs, downloads the selected video from R2, and starts FFmpeg locally.
+
+This is required because Cloudflare Pages and Workers are not suitable for long-running RTMP streaming. A PC or VPS still has to perform the actual FFmpeg stream.

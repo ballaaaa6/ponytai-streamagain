@@ -171,6 +171,22 @@ nav {
   font-size: 28px;
 }
 
+.storage-meter {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  overflow: hidden;
+}
+
+.storage-meter span {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: #ffbe2e;
+}
+
 .notice {
   background: linear-gradient(135deg, #7733f2, #6518f3);
   color: #fff;
@@ -436,6 +452,12 @@ select {
   display: flex;
   justify-content: space-between;
   gap: 16px;
+  align-items: center;
+}
+
+.row-actions {
+  display: flex;
+  gap: 10px;
   align-items: center;
 }
 
