@@ -1,0 +1,23 @@
+{
+  "name": "ponytai-streamagain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ponytai StreamAgain-style local rerun streamer with a Cloudflare-deployable web control panel.",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-server.js",
+    "agent": "node agent/server.js",
+    "start": "node scripts/start-all.js",
+    "check": "node scripts/check.js"
+  },
+  "keywords": [
+    "streaming",
+    "ffmpeg",
+    "rtmp",
+    "cloudflare-pages",
+    "vibecode-pro-max-kit",
+    "ponytai"
+  ],
+  "author": "Ponytai",
+  "license": "MIT"
+}

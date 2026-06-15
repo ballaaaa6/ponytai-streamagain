@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ponytai StreamAgain</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div>
+          <strong>Ponytai</strong>
+          <span>StreamAgain</span>
+        </div>
+      </div>
+      <nav>
+        <button class="nav-item active" type="button">New live stream</button>
+        <button class="nav-item" type="button">Videos</button>
+        <button class="nav-item" type="button">History</button>
+        <button class="nav-item" type="button">Settings</button>
+      </nav>
+      <div class="agent-card">
+        <span id="agentDot" class="dot"></span>
+        <div>
+          <strong id="agentLabel">Checking agent</strong>
+          <small id="agentRoot">localhost:8787</small>
+        </div>
+      </div>
+    </aside>
+
+    <main class="shell">
+      <header class="topbar">
+        <button id="refreshButton" class="icon-button" type="button" title="Refresh">↻</button>
+        <div class="profile">P</div>
+      </header>
+
+      <section class="stats">
+        <div class="stat">
+          <span>Plan</span>
+          <strong>Local Free</strong>
+        </div>
+        <div class="stat">
+          <span>Running</span>
+          <strong id="runningCount">0</strong>
+        </div>
+        <div class="stat">
+          <span>Limit</span>
+          <strong>No app cap</strong>
+        </div>
+      </section>
+
+      <section class="notice">
+        <strong>Cloudflare ready, local powered</strong>
+        <span>หน้าเว็บ deploy ได้ แต่ FFmpeg จะรันจากเครื่องคุณ</span>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h1>New Live Stream</h1>
+          <button id="addDestinationButton" class="secondary" type="button">+ Add Destination</button>
+        </div>
+
+        <form id="streamForm" class="stream-form">
+          <label>
+            <span>Title</span>
+            <input id="titleInput" name="title" required placeholder="ตั้งชื่อไลฟ์">
+          </label>
+
+          <label>
+            <span>Video Selection</span>
+            <select id="videoSelect" name="file" required>
+              <option value="">กำลังโหลดวิดีโอ...</option>
+            </select>
+          </label>
+
+          <div class="repeat-row">
+            <span>Repeat</span>
+            <label><input type="radio" name="repeat" value="loop" checked> 24/7</label>
+            <label><input type="radio" name="repeat" value="once"> No repeat</label>
+          </div>
+
+          <div>
+            <div class="field-label">Destinations</div>
+            <div id="destinationList" class="destination-list"></div>
+          </div>
+
+          <button class="primary" type="submit">Start Livestream</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <h2>Running Streams</h2>
+        </div>
+        <div id="streamsList" class="streams-list"></div>
+      </section>
+    </main>
+
+    <dialog id="destinationDialog" class="dialog">
+      <form id="destinationForm" method="dialog">
+        <div class="dialog-head">
+          <h2>Add Destination</h2>
+          <button class="ghost" value="cancel" type="submit">×</button>
+        </div>
+        <div class="platforms" id="platformButtons">
+          <button type="button" data-platform="youtube" class="platform active">YouTube</button>
+          <button type="button" data-platform="facebook" class="platform">Facebook</button>
+          <button type="button" data-platform="twitch" class="platform">Twitch</button>
+          <button type="button" data-platform="tiktok" class="platform">TikTok</button>
+          <button type="button" data-platform="rtmp" class="platform">RTMP</button>
+        </div>
+        <label id="serverUrlLabel" class="hidden">
+          <span>Server URL</span>
+          <input id="serverUrlInput" placeholder="rtmp://server/live">
+        </label>
+        <label>
+          <span>Stream Key</span>
+          <input id="streamKeyInput" required placeholder="paste stream key">
+        </label>
+        <menu>
+          <button class="primary" value="default" type="submit">Add</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

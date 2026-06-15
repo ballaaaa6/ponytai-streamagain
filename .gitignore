@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Local runtime data
+.data/
+videos/
+*.log
+
+# Build / platform
+dist/
+.wrangler/
+.pages/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets
+.env
+.env.*
+!.env.example
