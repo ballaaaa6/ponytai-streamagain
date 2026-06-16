@@ -17,9 +17,9 @@ export function loadConfig() {
     videoEncoder: process.env.VIDEO_ENCODER || "h264_nvenc",
     videoRoot,
     dataDir,
-    cloudApiUrl: process.env.CLOUD_API_URL || "https://ponytai-streamagain.pages.dev",
+    cloudApiUrl: process.env.CLOUD_API_URL || "",
     cloudAgentName: process.env.CLOUD_AGENT_NAME || "desktop-agent",
-    cloudPollMs: Number(process.env.CLOUD_POLL_MS || 5000)
+    cloudPollMs: Number(process.env.CLOUD_POLL_MS || 120000)
   };
 }
 
