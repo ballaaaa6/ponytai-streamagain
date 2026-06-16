@@ -23,6 +23,7 @@ const elements = {
   agentLabel: document.querySelector("#agentLabel"),
   agentRoot: document.querySelector("#agentRoot"),
   refreshButton: document.querySelector("#refreshButton"),
+  pageTitle: document.querySelector("#pageTitle"),
   runningCount: document.querySelector("#runningCount"),
   storageText: document.querySelector("#storageText"),
   storageBar: document.querySelector("#storageBar"),
@@ -231,7 +232,7 @@ function addDestination(event) {
 function renderDestinations() {
   elements.destinationList.innerHTML = "";
   if (!state.destinations.length) {
-    elements.destinationList.innerHTML = `<p class="empty">No destination added yet.</p>`;
+    elements.destinationList.innerHTML = `<p class="empty">No destination yet. Add RTMP, Lazada, YouTube, or any stream key target.</p>`;
     return;
   }
 
@@ -241,7 +242,7 @@ function renderDestinations() {
     row.innerHTML = `
       <div>
         <strong>${escapeHtml(destination.label)}</strong>
-        <code>${maskKey(destination.streamKey)}</code>
+        <div><code>${maskKey(destination.streamKey)}</code></div>
       </div>
       <button class="danger" type="button">Remove</button>
     `;
@@ -469,10 +470,10 @@ function renderHistory() {
           <strong>${escapeHtml(item.title || "Untitled stream")}</strong>
           <span class="status-pill ${statusClass(item.status)}">${statusLabel(item.status)}</span>
         </div>
-        <div>${new Date(item.historyAt || item.startedAt).toLocaleString()} · ${escapeHtml(item.file || "")} · ${item.destinations?.length || item.destinationCount || 1} destination</div>
+        <div class="history-meta">${new Date(item.historyAt || item.startedAt).toLocaleString()} · ${escapeHtml(item.file || "")} · ${item.destinations?.length || item.destinationCount || 1} destination</div>
         ${renderResourceLine(item)}
       </div>
-      ${canStop ? `<button class="secondary" type="button" data-stop="${escapeHtml(item.activeId)}">Stop</button>` : ""}
+      ${canStop ? `<button class="secondary stop-button" type="button" data-stop="${escapeHtml(item.activeId)}">Stop</button>` : ""}
     `;
     row.querySelector("[data-stop]")?.addEventListener("click", () => askStopStream(item));
     elements.historyList.append(row);
@@ -563,6 +564,11 @@ function showView(name) {
   elements.views.forEach((view) => {
     view.classList.toggle("active", view.dataset.view === name);
   });
+  elements.pageTitle.textContent = {
+    stream: "New Live Stream",
+    videos: "Videos",
+    history: "History"
+  }[name] || "Ponytai StreamAgain";
 }
 
 function renderResourceSummary() {
@@ -574,6 +580,21 @@ function renderResourceSummary() {
         <span>Status</span>
         <strong>Idle</strong>
         <small>No active FFmpeg process</small>
+      </div>
+      <div class="resource-card">
+        <span>CPU</span>
+        <strong>0%</strong>
+        <small>FFmpeg is not using CPU</small>
+      </div>
+      <div class="resource-card">
+        <span>Memory</span>
+        <strong>0 B</strong>
+        <small>No livestream process</small>
+      </div>
+      <div class="resource-card">
+        <span>Encoder</span>
+        <strong>Ready</strong>
+        <small>GPU/CPU encoder will appear while live</small>
       </div>
     `;
     return;

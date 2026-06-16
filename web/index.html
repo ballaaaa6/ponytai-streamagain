@@ -31,6 +31,10 @@
 
     <main class="shell">
       <header class="topbar">
+        <div>
+          <p class="eyebrow">Livestream control</p>
+          <h1 id="pageTitle">New Live Stream</h1>
+        </div>
         <button id="refreshButton" class="icon-button" type="button" title="Refresh">↻</button>
         <div class="profile">P</div>
       </header>
@@ -53,17 +57,20 @@
 
       <section class="panel view active" data-view="stream">
         <div class="panel-heading">
-          <h1>New Live Stream</h1>
+          <div>
+            <p class="section-kicker">Step 1</p>
+            <h2>New Live Stream</h2>
+          </div>
           <button id="addDestinationButton" class="secondary" type="button">+ Add Destination</button>
         </div>
 
         <form id="streamForm" class="stream-form">
-          <label>
+          <label class="field">
             <span>Title</span>
             <input id="titleInput" name="title" required placeholder="Enter a stream title">
           </label>
 
-          <label>
+          <label class="field">
             <span>Video Selection</span>
             <select id="videoSelect" name="file" required>
               <option value="">Loading B2 videos...</option>
@@ -76,12 +83,18 @@
             <label><input type="radio" name="repeat" value="once"> No repeat</label>
           </div>
 
-          <div>
+          <div class="destination-section">
             <div class="field-label">Destinations</div>
             <div id="destinationList" class="destination-list"></div>
           </div>
 
-          <button id="startStreamButton" class="primary" type="submit">Start Livestream</button>
+          <div class="start-bar">
+            <div>
+              <strong>Ready to rerun</strong>
+              <span>Add a destination, pick a video, then start from this PC.</span>
+            </div>
+            <button id="startStreamButton" class="primary" type="submit">Start Livestream</button>
+          </div>
         </form>
       </section>
 
