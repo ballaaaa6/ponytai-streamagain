@@ -31,7 +31,7 @@ export class StreamManager {
     const destinations = Array.isArray(payload.destinations) ? payload.destinations : [];
 
     return [...this.jobs.values()].find((job) => {
-      return ["running", "stopping"].includes(job.status)
+      return ["running", "restarting", "stopping"].includes(job.status)
         && job.title === title
         && path.resolve(job.file) === file
         && destinationSignature(job.destinations) === destinationSignature(destinations);
@@ -50,23 +50,37 @@ export class StreamManager {
 
     const id = createId();
     const args = this.buildArgs(file, repeat, destinations);
-    const child = spawn(this.config.ffmpegPath, args, {
-      windowsHide: true,
-      stdio: ["ignore", "ignore", "pipe"]
-    });
-
     const job = {
       id,
       title,
       file,
       repeat,
       destinations,
+      args,
       startedAt: new Date().toISOString(),
       status: "running",
       exitCode: null,
-      child,
+      child: null,
+      stopping: false,
+      restartCount: 0,
       log: [`Started ${title}`]
     };
+    this.jobs.set(id, job);
+    this.spawnJob(job);
+    return { id };
+  }
+
+  spawnJob(job) {
+    const child = spawn(this.config.ffmpegPath, job.args, {
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"]
+    });
+
+    job.child = child;
+    job.status = "running";
+    job.exitCode = null;
+    job.endedAt = null;
+    job.log.push(job.restartCount ? `Restarted FFmpeg (${job.restartCount}).` : "FFmpeg process started.");
 
     child.stderr.on("data", (chunk) => {
       const text = chunk.toString().trim();
@@ -76,29 +90,59 @@ export class StreamManager {
     });
 
     child.on("exit", (code) => {
-      job.status = code === 0 ? "ended" : "stopped";
       job.exitCode = code;
-      job.endedAt = job.endedAt || new Date().toISOString();
       job.log.push(`FFmpeg exited with code ${code}.`);
+
+      if (job.stopping) {
+        job.status = "stopped";
+        job.endedAt = job.endedAt || new Date().toISOString();
+        return;
+      }
+
+      if (this.config.streamAutoRestart && job.repeat) {
+        job.status = "restarting";
+        job.restartCount += 1;
+        job.log.push("Auto-restart scheduled after FFmpeg exit.");
+        setTimeout(() => {
+          if (!this.jobs.has(job.id) || job.stopping) return;
+          this.spawnJob(job);
+        }, restartDelayMs(job.restartCount));
+        return;
+      }
+
+      job.status = code === 0 ? "ended" : "stopped";
+      job.endedAt = job.endedAt || new Date().toISOString();
     });
 
     child.on("error", (error) => {
+      job.log.push(error.message);
+      if (job.stopping) {
+        job.status = "stopped";
+        job.endedAt = job.endedAt || new Date().toISOString();
+        return;
+      }
+      if (this.config.streamAutoRestart && job.repeat) {
+        job.status = "restarting";
+        job.restartCount += 1;
+        setTimeout(() => {
+          if (!this.jobs.has(job.id) || job.stopping) return;
+          this.spawnJob(job);
+        }, restartDelayMs(job.restartCount));
+        return;
+      }
       job.status = "error";
       job.endedAt = job.endedAt || new Date().toISOString();
-      job.log.push(error.message);
     });
-
-    this.jobs.set(id, job);
-    return { id };
   }
 
   stop(id) {
     const job = this.jobs.get(id);
     if (!job) throw new Error("Stream not found.");
-    if (job.status === "running") {
+    if (["running", "restarting"].includes(job.status)) {
+      job.stopping = true;
       job.status = "stopping";
       job.endedAt = new Date().toISOString();
-      job.child.kill("SIGTERM");
+      if (job.child && !job.child.killed) job.child.kill("SIGTERM");
     }
     return { ok: true, stream: this.toPublicJob(job) };
   }
@@ -118,6 +162,7 @@ export class StreamManager {
       durationMs: durationMs(job.startedAt, job.endedAt),
       status: job.status,
       exitCode: job.exitCode ?? null,
+      restartCount: job.restartCount || 0,
       resources: readProcessResources(job.child.pid, job.log),
       log: job.log.slice(-80)
     };
@@ -276,6 +321,10 @@ function readProcessResources(pid, log) {
 
 function createId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function restartDelayMs(restartCount) {
+  return Math.min(30000, 3000 + restartCount * 2000);
 }
 
 function durationMs(startedAt, endedAt) {

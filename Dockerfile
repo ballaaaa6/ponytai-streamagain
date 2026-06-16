@@ -17,6 +17,9 @@ ENV VIDEO_ENCODER=libx264
 ENV CLOUD_AGENT_NAME=render-agent
 ENV CLOUD_API_URL=https://ponytai-streamagain.pages.dev
 ENV CLOUD_POLL_MS=120000
+ENV RENDER_KEEPALIVE_URL=https://ponytai-streamagain-render.onrender.com
+ENV RENDER_KEEPALIVE_MS=300000
+ENV STREAM_AUTO_RESTART=true
 
 EXPOSE 10000
 

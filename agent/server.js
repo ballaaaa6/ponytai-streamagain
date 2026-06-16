@@ -9,6 +9,7 @@ import { CloudClient } from "./cloud-client.js";
 const config = loadConfig();
 const manager = new StreamManager(config);
 const cloudClient = new CloudClient(config, manager);
+let keepAliveTimer = null;
 
 const server = http.createServer(async (req, res) => {
   setCors(res);
@@ -39,6 +40,16 @@ const server = http.createServer(async (req, res) => {
             streams: manager.list()
           }
         }
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/keepalive") {
+      sendJson(res, {
+        ok: true,
+        agent: config.cloudAgentName,
+        now: new Date().toISOString(),
+        running: manager.list().filter((stream) => stream.status === "running").length
       });
       return;
     }
@@ -161,7 +172,24 @@ server.listen(config.port, () => {
   console.log(`Video root: ${config.videoRoot}`);
   console.log(`Cloud API: ${config.cloudApiUrl}`);
   cloudClient.start();
+  startKeepAlive();
 });
+
+function startKeepAlive() {
+  if (!config.keepAliveUrl) return;
+  const url = `${config.keepAliveUrl.replace(/\/+$/g, "")}/api/keepalive`;
+  const ping = async () => {
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      console.log(`[keepalive] ${response.status} ${url}`);
+    } catch (error) {
+      console.error(`[keepalive] ${error.message}`);
+    }
+  };
+  keepAliveTimer = setInterval(ping, config.keepAliveMs);
+  keepAliveTimer.unref?.();
+  ping();
+}
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");

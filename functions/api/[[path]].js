@@ -147,7 +147,7 @@ export async function onRequest(context) {
       };
       const jobs = await readJobs(b2);
       const duplicate = jobs.find((item) => {
-        return ["queued", "downloading", "running", "stopping"].includes(item.status)
+        return ["queued", "downloading", "running", "restarting", "stopping"].includes(item.status)
           && item.title === job.title
           && item.videoKey === job.videoKey
           && destinationSignature(item.destinations) === destinationSignature(job.destinations);
@@ -183,12 +183,15 @@ export async function onRequest(context) {
 
     if (request.method === "POST" && route === "/agent/heartbeat") {
       const body = await request.json().catch(() => ({}));
+      const agentName = String(body.name || "desktop-agent");
+      const details = body.details || {};
       const agent = {
-        name: String(body.name || "desktop-agent"),
+        name: agentName,
         status: "online",
         updatedAt: new Date().toISOString(),
-        details: body.details || {}
+        details
       };
+      await recoverMissingAgentStreams(b2, agentName, details);
       await writeJson(b2, `${CONTROL_PREFIX}agent.json`, agent);
       return json({ ok: true, agent });
     }
@@ -339,6 +342,35 @@ async function appendHistory(b2, item) {
   const history = await readJson(b2, `${CONTROL_PREFIX}history.json`, []);
   history.unshift({ ...item, historyAt: new Date().toISOString() });
   await writeJson(b2, `${CONTROL_PREFIX}history.json`, history.slice(0, 200));
+}
+
+async function recoverMissingAgentStreams(b2, agentName, details) {
+  const activeLocalIds = new Set((details.streams || [])
+    .filter((stream) => ["running", "restarting", "stopping"].includes(stream.status))
+    .map((stream) => stream.id));
+  const jobs = await readJobs(b2);
+  let changed = false;
+
+  for (const job of jobs) {
+    const ownedByAgent = !job.agent?.name || job.agent.name === agentName;
+    const shouldBeLocal = ["running", "downloading", "restarting"].includes(job.status);
+    const missingLocalProcess = !job.localJobId || !activeLocalIds.has(job.localJobId);
+    if (!ownedByAgent || !shouldBeLocal || !missingLocalProcess) continue;
+
+    if (job.repeat === "once") {
+      job.status = "error";
+      job.endedAt = job.endedAt || new Date().toISOString();
+      job.log = [...(job.log || []), "Agent restarted while this one-time stream was active."].slice(-40);
+    } else {
+      job.status = "queued";
+      job.localJobId = null;
+      job.log = [...(job.log || []), "Agent recovered a missing FFmpeg process and queued this stream again."].slice(-40);
+    }
+    job.updatedAt = new Date().toISOString();
+    changed = true;
+  }
+
+  if (changed) await writeJobs(b2, jobs);
 }
 
 async function readJson(b2, fileName, fallback) {
