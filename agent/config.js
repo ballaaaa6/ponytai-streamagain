@@ -18,6 +18,7 @@ export function loadConfig() {
     videoRoot,
     dataDir,
     cloudApiUrl: process.env.CLOUD_API_URL || "",
+    controlPanelUrl: process.env.CONTROL_PANEL_URL || process.env.CLOUD_API_URL || "",
     cloudAgentName: process.env.CLOUD_AGENT_NAME || "desktop-agent",
     cloudPollMs: Number(process.env.CLOUD_POLL_MS || 120000),
     keepAliveUrl: process.env.RENDER_KEEPALIVE_URL || process.env.SELF_URL || "",

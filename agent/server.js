@@ -157,6 +157,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET") {
+      if (shouldRedirectToControlPanel(req, url)) {
+        redirectToControlPanel(res, url);
+        return;
+      }
       serveWeb(req, res);
       return;
     }
@@ -189,6 +193,22 @@ function startKeepAlive() {
   keepAliveTimer = setInterval(ping, config.keepAliveMs);
   keepAliveTimer.unref?.();
   ping();
+}
+
+function shouldRedirectToControlPanel(req, url) {
+  if (!config.controlPanelUrl) return false;
+  if (url.pathname.startsWith("/api/")) return false;
+  const host = String(req.headers.host || "").toLowerCase();
+  return host.includes("onrender.com");
+}
+
+function redirectToControlPanel(res, url) {
+  const target = new URL(url.pathname + url.search + url.hash, config.controlPanelUrl);
+  res.writeHead(302, {
+    Location: target.href,
+    "Cache-Control": "no-store"
+  });
+  res.end();
 }
 
 function setCors(res) {
