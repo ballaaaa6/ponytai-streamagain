@@ -17,21 +17,12 @@ export class StreamManager {
   }
 
   list() {
-    return [...this.jobs.values()].map((job) => ({
-      id: job.id,
-      title: job.title,
-      file: path.basename(job.file),
-      repeat: job.repeat,
-      destinations: job.destinations.map((destination) => ({
-        platform: destination.platform,
-        label: destination.label || destination.platform
-      })),
-      startedAt: job.startedAt,
-      status: job.status,
-      exitCode: job.exitCode ?? null,
-      resources: readProcessResources(job.child.pid, job.log),
-      log: job.log.slice(-80)
-    }));
+    return [...this.jobs.values()].map((job) => this.toPublicJob(job));
+  }
+
+  get(id) {
+    const job = this.jobs.get(id);
+    return job ? this.toPublicJob(job) : null;
   }
 
   findActiveDuplicate(payload) {
@@ -87,11 +78,13 @@ export class StreamManager {
     child.on("exit", (code) => {
       job.status = code === 0 ? "ended" : "stopped";
       job.exitCode = code;
+      job.endedAt = job.endedAt || new Date().toISOString();
       job.log.push(`FFmpeg exited with code ${code}.`);
     });
 
     child.on("error", (error) => {
       job.status = "error";
+      job.endedAt = job.endedAt || new Date().toISOString();
       job.log.push(error.message);
     });
 
@@ -104,9 +97,30 @@ export class StreamManager {
     if (!job) throw new Error("Stream not found.");
     if (job.status === "running") {
       job.status = "stopping";
+      job.endedAt = new Date().toISOString();
       job.child.kill("SIGTERM");
     }
-    return { ok: true };
+    return { ok: true, stream: this.toPublicJob(job) };
+  }
+
+  toPublicJob(job) {
+    return {
+      id: job.id,
+      title: job.title,
+      file: path.basename(job.file),
+      repeat: job.repeat,
+      destinations: job.destinations.map((destination) => ({
+        platform: destination.platform,
+        label: destination.label || destination.platform
+      })),
+      startedAt: job.startedAt,
+      endedAt: job.endedAt || null,
+      durationMs: durationMs(job.startedAt, job.endedAt),
+      status: job.status,
+      exitCode: job.exitCode ?? null,
+      resources: readProcessResources(job.child.pid, job.log),
+      log: job.log.slice(-80)
+    };
   }
 
   buildArgs(file, repeat, destinations) {
@@ -262,4 +276,12 @@ function readProcessResources(pid, log) {
 
 function createId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function durationMs(startedAt, endedAt) {
+  if (!startedAt || !endedAt) return null;
+  const start = new Date(startedAt).getTime();
+  const end = new Date(endedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  return end - start;
 }

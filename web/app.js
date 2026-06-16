@@ -123,6 +123,7 @@ setupDropUpload(elements.deviceUploadPane);
 
 refresh();
 setInterval(refreshLight, 30000);
+setInterval(renderHistory, 1000);
 
 async function refresh() {
   await Promise.all([loadHealth(), loadVideos(), refreshStreams(), loadHistory()]);
@@ -544,7 +545,9 @@ function renderHistory() {
           <strong>${escapeHtml(item.title || "Untitled stream")}</strong>
           <span class="status-pill ${statusClass(item.status)}">${statusLabel(item.status)}</span>
         </div>
-        <div class="history-meta">${new Date(item.historyAt || item.startedAt).toLocaleString()} · ${escapeHtml(item.file || "")} · ${item.destinations?.length || item.destinationCount || 1} destination</div>
+        <div class="history-meta">
+          ${historyTimeLabel(item)} · ${historyDurationLabel(item)} · ${escapeHtml(item.file || "")} · ${item.destinations?.length || item.destinationCount || 1} destination
+        </div>
         ${renderResourceLine(item)}
       </div>
       ${canStop ? `<button class="secondary stop-button" type="button" data-stop="${escapeHtml(item.activeId)}">Stop</button>` : ""}
@@ -710,9 +713,17 @@ function combinedHistory() {
     destinationCount: stream.destinations?.length || 0
   }));
   const liveIds = new Set(live.map((item) => item.id));
+  const latestHistory = [];
+  const seenHistory = new Set();
+  for (const item of state.history) {
+    const key = item.id || `${item.title}:${item.file}:${item.historyAt}`;
+    if (seenHistory.has(key)) continue;
+    seenHistory.add(key);
+    latestHistory.push(item);
+  }
   return [
     ...live,
-    ...state.history
+    ...latestHistory
       .filter((item) => !liveIds.has(item.id))
       .map((item) => ({
         ...item,
@@ -754,14 +765,53 @@ function renderResourceLine(item) {
   return `<div class="resource-line">${parts.map(escapeHtml).join(" · ")}</div>`;
 }
 
+function historyTimeLabel(item) {
+  const startedAt = item.startedAt || item.historyAt;
+  if (!startedAt) return "Start time unavailable";
+  return `Started ${new Date(startedAt).toLocaleString()}`;
+}
+
+function historyDurationLabel(item) {
+  if (item.status === "running") {
+    return `Running for ${formatElapsed(Date.now() - new Date(item.startedAt || item.historyAt).getTime())}`;
+  }
+
+  const duration = getHistoryDurationMs(item);
+  if (duration === null) return "Duration not recorded";
+  return `Duration ${formatElapsed(duration)}`;
+}
+
+function getHistoryDurationMs(item) {
+  if (Number.isFinite(item.durationMs)) return item.durationMs;
+  if (!item.startedAt || !item.endedAt) return null;
+  const start = new Date(item.startedAt).getTime();
+  const end = new Date(item.endedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  return end - start;
+}
+
+function formatElapsed(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "0s";
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
 function statusClass(status) {
-  if (status === "running") return "live";
+  if (["running", "stopping", "downloading", "queued"].includes(status)) return "live";
   if (status === "scheduled") return "scheduled";
   return "stopped";
 }
 
 function statusLabel(status) {
   if (status === "running") return "LIVE";
+  if (status === "stopping") return "STOPPING";
+  if (status === "downloading") return "DOWNLOADING";
+  if (status === "queued") return "QUEUED";
   if (status === "scheduled") return "SCHEDULED";
   return "STOP";
 }

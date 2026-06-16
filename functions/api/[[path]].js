@@ -166,7 +166,9 @@ export async function onRequest(context) {
       if (!job) return json({ error: "Stream not found." }, 404);
       job.status = "stopping";
       job.updatedAt = new Date().toISOString();
+      job.endedAt = job.endedAt || job.updatedAt;
       await writeJobs(b2, jobs);
+      await appendHistory(b2, { ...publicJob(job), event: "stopping" });
       return json({ ok: true });
     }
 
@@ -202,6 +204,7 @@ export async function onRequest(context) {
       job.localJobId = body.localJobId || job.localJobId;
       job.resources = body.resources || job.resources;
       job.updatedAt = new Date().toISOString();
+      if (["stopped", "ended", "error"].includes(job.status)) job.endedAt = job.endedAt || job.updatedAt;
       if (body.message) job.log = [...(job.log || []), String(body.message)].slice(-40);
       await writeJobs(b2, jobs);
       await appendHistory(b2, { ...publicJob(job), event: job.status });
@@ -367,11 +370,21 @@ function publicJob(job) {
     })),
     status: job.status,
     startedAt: job.createdAt,
+    endedAt: job.endedAt || null,
+    durationMs: durationMs(job.createdAt, job.endedAt),
     updatedAt: job.updatedAt,
     agent: job.agent,
     resources: job.resources || null,
     log: job.log || []
   };
+}
+
+function durationMs(startedAt, endedAt) {
+  if (!startedAt || !endedAt) return null;
+  const start = new Date(startedAt).getTime();
+  const end = new Date(endedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  return end - start;
 }
 
 function fileToVideo(file) {

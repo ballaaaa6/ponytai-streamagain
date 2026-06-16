@@ -110,10 +110,9 @@ const server = http.createServer(async (req, res) => {
       });
       if (duplicate) throw new Error("This livestream is already running.");
       const started = manager.start({ ...body, file });
+      const stream = manager.get(started.id);
       appendHistory({
-        id: started.id,
-        title: body.title,
-        file: path.basename(file),
+        ...stream,
         event: "started",
         status: "running",
         historyAt: new Date().toISOString()
@@ -132,7 +131,17 @@ const server = http.createServer(async (req, res) => {
 
     const stopMatch = url.pathname.match(/^\/api\/streams\/([^/]+)\/stop$/);
     if (req.method === "POST" && stopMatch) {
-      sendJson(res, manager.stop(stopMatch[1]));
+      const stopped = manager.stop(stopMatch[1]);
+      const stream = stopped.stream || manager.get(stopMatch[1]);
+      if (stream) {
+        appendHistory({
+          ...stream,
+          event: "stopped",
+          status: "stopped",
+          historyAt: new Date().toISOString()
+        });
+      }
+      sendJson(res, stopped);
       return;
     }
 
