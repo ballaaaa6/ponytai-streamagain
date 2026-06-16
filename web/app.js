@@ -7,6 +7,8 @@ const state = {
   history: [],
   streams: [],
   pendingStopStream: null,
+  pendingRenameVideo: null,
+  pendingDeleteKey: null,
   isStartingStream: false,
   storage: {
     usedBytes: 0,
@@ -61,6 +63,14 @@ const elements = {
   stopDialog: document.querySelector("#stopDialog"),
   stopDialogText: document.querySelector("#stopDialogText"),
   confirmStopButton: document.querySelector("#confirmStopButton"),
+  renameDialog: document.querySelector("#renameDialog"),
+  renameForm: document.querySelector("#renameForm"),
+  renameVideoInput: document.querySelector("#renameVideoInput"),
+  renameHint: document.querySelector("#renameHint"),
+  confirmRenameButton: document.querySelector("#confirmRenameButton"),
+  deleteDialog: document.querySelector("#deleteDialog"),
+  deleteDialogText: document.querySelector("#deleteDialogText"),
+  confirmDeleteButton: document.querySelector("#confirmDeleteButton"),
   dialogCloseButtons: document.querySelectorAll("[data-dialog-close]")
 };
 
@@ -100,6 +110,14 @@ elements.stopDialog.addEventListener("close", () => {
   if (elements.stopDialog.returnValue !== "default") state.pendingStopStream = null;
 });
 elements.confirmStopButton.addEventListener("click", confirmStopStream);
+elements.renameDialog.addEventListener("close", () => {
+  if (elements.renameDialog.returnValue !== "default") state.pendingRenameVideo = null;
+});
+elements.renameForm.addEventListener("submit", confirmRenameVideo);
+elements.deleteDialog.addEventListener("close", () => {
+  if (elements.deleteDialog.returnValue !== "default") state.pendingDeleteKey = null;
+});
+elements.confirmDeleteButton.addEventListener("click", confirmDeleteVideo);
 setupDropUpload(elements.videosList);
 setupDropUpload(elements.deviceUploadPane);
 
@@ -413,27 +431,83 @@ function renderVideos() {
       elements.videoSelect.value = video.key;
       showView("stream");
     });
-    row.querySelector("[data-rename]").addEventListener("click", () => renameVideo(video));
-    row.querySelector("[data-delete]").addEventListener("click", () => deleteVideo(video.key));
+    row.querySelector("[data-rename]").addEventListener("click", () => askRenameVideo(video));
+    row.querySelector("[data-delete]").addEventListener("click", () => askDeleteVideo(video));
     elements.videosList.append(row);
   }
 }
 
-async function renameVideo(video) {
-  const nextName = prompt("New video name", video.name);
-  if (!nextName || nextName === video.name) return;
-  await api("/api/videos/rename", {
-    method: "POST",
-    body: JSON.stringify({ key: video.key, name: nextName })
-  });
-  showToast("Video renamed.");
-  await loadVideos();
+function askRenameVideo(video) {
+  state.pendingRenameVideo = video;
+  elements.renameVideoInput.value = stripExtension(video.name);
+  elements.renameHint.textContent = `Current file: ${video.name}. The ${fileExtension(video.name)} extension will be kept if you do not type one.`;
+  elements.confirmRenameButton.disabled = false;
+  elements.confirmRenameButton.textContent = "Rename";
+  elements.renameDialog.returnValue = "";
+  elements.renameDialog.showModal();
+  elements.renameVideoInput.focus();
+  elements.renameVideoInput.select();
 }
 
-async function deleteVideo(key) {
-  await api(`/api/videos?key=${encodeURIComponent(key)}`, { method: "DELETE" });
-  showToast("Video deleted.");
-  await loadVideos();
+async function confirmRenameVideo(event) {
+  event.preventDefault();
+  const video = state.pendingRenameVideo;
+  if (!video) return;
+  const nextName = normalizeVideoName(elements.renameVideoInput.value, video.name);
+  if (!nextName) {
+    showToast("Enter a video name first.");
+    return;
+  }
+  if (nextName === video.name) {
+    elements.renameDialog.close("cancel");
+    state.pendingRenameVideo = null;
+    return;
+  }
+
+  elements.confirmRenameButton.disabled = true;
+  elements.confirmRenameButton.textContent = "Renaming...";
+  try {
+    await api("/api/videos/rename", {
+      method: "POST",
+      body: JSON.stringify({ key: video.key, name: nextName })
+    });
+    elements.renameDialog.close("default");
+    state.pendingRenameVideo = null;
+    showToast(`Renamed to ${nextName}`);
+    await loadVideos();
+  } catch (error) {
+    showToast(error.message);
+    elements.confirmRenameButton.disabled = false;
+    elements.confirmRenameButton.textContent = "Rename";
+  }
+}
+
+function askDeleteVideo(video) {
+  state.pendingDeleteKey = video.key;
+  elements.deleteDialogText.textContent = `Delete "${video.name}" from storage? This cannot be undone.`;
+  elements.confirmDeleteButton.disabled = false;
+  elements.confirmDeleteButton.textContent = "Delete";
+  elements.deleteDialog.returnValue = "";
+  elements.deleteDialog.showModal();
+}
+
+async function confirmDeleteVideo(event) {
+  event.preventDefault();
+  const key = state.pendingDeleteKey;
+  if (!key) return;
+  elements.confirmDeleteButton.disabled = true;
+  elements.confirmDeleteButton.textContent = "Deleting...";
+  try {
+    await api(`/api/videos?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+    elements.deleteDialog.close("default");
+    state.pendingDeleteKey = null;
+    showToast("Video deleted.");
+    await loadVideos();
+  } catch (error) {
+    showToast(error.message);
+    elements.confirmDeleteButton.disabled = false;
+    elements.confirmDeleteButton.textContent = "Delete";
+  }
 }
 
 function renderHistory() {
@@ -751,6 +825,23 @@ function showToast(message) {
 function closeDialog(id) {
   const dialog = document.getElementById(id);
   if (dialog?.open) dialog.close("cancel");
+}
+
+function normalizeVideoName(value, currentName) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  const currentExt = fileExtension(currentName);
+  return fileExtension(trimmed) ? trimmed : `${trimmed}${currentExt}`;
+}
+
+function stripExtension(name) {
+  const ext = fileExtension(name);
+  return ext ? name.slice(0, -ext.length) : name;
+}
+
+function fileExtension(name) {
+  const match = String(name || "").match(/\.[a-z0-9]+$/i);
+  return match ? match[0] : "";
 }
 
 function escapeHtml(value) {

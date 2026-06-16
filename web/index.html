@@ -221,6 +221,36 @@
         </menu>
       </form>
     </dialog>
+    <dialog id="renameDialog" class="dialog compact-dialog">
+      <form id="renameForm">
+        <div class="dialog-head">
+          <h2>Rename video</h2>
+          <button class="ghost" type="button" data-dialog-close="renameDialog">×</button>
+        </div>
+        <label class="dialog-field">
+          <span>Video name</span>
+          <input id="renameVideoInput" required placeholder="example.mp4">
+        </label>
+        <small id="renameHint" class="dialog-hint">Keep the same file type, or type only the new name and it will be added automatically.</small>
+        <menu class="dialog-actions">
+          <button class="secondary" value="cancel" type="button" data-dialog-close="renameDialog">Cancel</button>
+          <button id="confirmRenameButton" class="primary" value="default" type="submit">Rename</button>
+        </menu>
+      </form>
+    </dialog>
+    <dialog id="deleteDialog" class="dialog compact-dialog">
+      <form method="dialog">
+        <div class="dialog-head">
+          <h2>Delete video?</h2>
+          <button class="ghost" type="button" data-dialog-close="deleteDialog">×</button>
+        </div>
+        <p id="deleteDialogText">This video will be removed from storage.</p>
+        <menu class="dialog-actions">
+          <button class="secondary" value="cancel" type="submit">Cancel</button>
+          <button id="confirmDeleteButton" class="primary danger-primary" value="default" type="submit">Delete</button>
+        </menu>
+      </form>
+    </dialog>
     <script src="./app.js" type="module"></script>
   </body>
 </html>
